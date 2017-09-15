@@ -10,28 +10,53 @@
             })
             .reduce((memo, row) => {
 
-                if (!memo[row.date]) {
-                    memo[row.date] = { rows: [] };
+                const data = memo.data;
+                const totals = memo.totals;
+
+                if (!data[row.date]) {
+                    data[row.date] = { rows: [] };
                 }
 
-                memo[row.date].rows.push(row);
+                data[row.date].rows.push(row);
 
                 const id = `${row.assignable_type}-${row.assignable_id}`;
-                if (row.is_suggestion && !memo[row.date][`${id}-hours`]) {
-                    memo[row.date][`${id}-scheduled`] = row.scheduled_hours;
-                } else {
-                    delete memo[row.date][`${id}-scheduled`];
-                    memo[row.date][`${id}-hours`] = row.hours;
+
+                if (!totals[id]) {
+                    totals[id] = {};
+                }
+
+                const [y, m, d] = row.date.split('-');
+
+                if (!totals[id][`${y}-${m}`]) {
+                    totals[id][`${y}-${m}`] = 0;
+                }
+
+                if (row.is_suggestion && !data[row.date][`${id}-hours`]) {
+                    data[row.date][`${id}-scheduled`] = row.scheduled_hours;
+                }
+                else {
+                    delete data[row.date][`${id}-scheduled`];
+                    if (row.hours > 0) {
+                        data[row.date][`${id}-hours`] = row.hours;
+                        totals[id][`${y}-${m}`] += row.hours;
+                    }
                     if (row.notes !== null) {
-                        memo[row.date][`${id}-notes`] = row.notes;
+                        data[row.date][`${id}-notes`] = row.notes;
                     }
                 }
 
                 return memo;
-            }, {});
+            }, { data: {}, totals: {} });
 
-        console.table(fixed);
+        console.table(fixed.data);
+        console.table(fixed.totals);
+        // console.log(document.querySelector('#personPageMainContentAreaTimeTracker'));
     };
+
+    if (!window.whoami) {
+        alert('Are you on 10kft? And logged in?');
+        return;
+    }
 
     const userId = window.whoami.id;
 
@@ -45,5 +70,4 @@
         .then((res) => res.json())
         .then((body) => report(body.data));
 
-    // console.log(document.querySelector('#personPageMainContentAreaTimeTracker'));
 })();
