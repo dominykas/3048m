@@ -6,18 +6,56 @@
 
     const now = new Date();
 
-    // const px = 1, dx = 1;
-    const px = 0, dx = 0;
-
-    const from = new Date(now.getFullYear(), now.getMonth() - px, 1);
-    const to = new Date(now.getFullYear(), now.getMonth() + dx + 1, 0);
+    const from = new Date(now.getFullYear(), now.getMonth(), 1);
+    const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
     const fromFmt = `${from.getFullYear()}-${from.getMonth() + 1}-${from.getDate()}`;
     const toFmt = `${to.getFullYear()}-${to.getMonth() + 1}-${to.getDate()}`;
 
-    const report = (res) => {
+    const report = ({ timeEntries, projects, leaveTypes }) => {
 
-        window.____data = res;
+        window.____data = { timeEntries, projects, leaveTypes };
+
+        const getProjectHeading = (projectKey) => {
+
+            if (projectKey.startsWith('LeaveType-')) {
+                const leaveId = +projectKey.substr(10);
+                const leave = leaveTypes.find((p) => p.id === leaveId);
+
+                if (leave) {
+                    return leave.name;
+                }
+            }
+
+            if (projectKey.startsWith('Project-')) {
+                const projectId = +projectKey.substr(8);
+                const project = projects.find((p) => p.id === projectId);
+
+                if (project) {
+                    return project.name;
+                }
+            }
+
+            return projectKey;
+        };
+
+        const getProjectColor = function (projectKey) {
+
+            if (projectKey.startsWith('LeaveType-')) {
+                return 'grad-orange';
+            }
+
+            if (projectKey.startsWith('Project-')) {
+                const projectId = +projectKey.substr(8);
+                const project = projects.find((p) => p.id === projectId);
+
+                if (project && project.project_state === 'Internal') {
+                    return 'grad-purple';
+                }
+            }
+
+            return 'grad-blue';
+        };
 
         const initialValue = {
             data: {},
@@ -37,7 +75,7 @@
             day++;
         } while (date < to);
 
-        const fixed = res.reduce((memo, row) => {
+        const fixed = timeEntries.reduce((memo, row) => {
 
             const data = memo.data;
             const totals = memo.totals;
@@ -78,12 +116,12 @@
             return memo;
         }, initialValue);
 
-        console.table(fixed.data);
-        console.table(fixed.totals);
+        // console.table(fixed.data);
+        // console.table(fixed.totals);
 
         const headingsHtml = `<tr>
     <th>Date</th>
-    ${Object.keys(fixed.totals).map((k) => `<th colspan="2" style="padding-right: 14px;">${k}</th>`).join('')}
+    ${Object.keys(fixed.totals).map((k) => `<th colspan="2" style="padding-right: 14px;">${getProjectHeading(k)}</th>`).join('')}
 </tr>`;
 
         const dataHtml = Object.keys(fixed.data).reduce((memo, date) => {
@@ -102,7 +140,7 @@
                     }
                     if (fixed.data[date][k] && fixed.data[date][k].hours) {
                         hours = fixed.data[date][k].hours;
-                        hoursClass = 'has-gradient confirmed ' + (k.indexOf('LeaveType') === 0 ? 'grad-orange' : 'grad-blue');
+                        hoursClass = 'has-gradient confirmed ' + getProjectColor(k);
                     }
                     if (fixed.data[date][k] && fixed.data[date][k].notes) {
                         notes = fixed.data[date][k].notes;
@@ -119,7 +157,7 @@
                 const month = date.substr(0, 7);
                 totals = `<tr class="tk-time-tracker-row" style="background-color:#e5e5e5">
 <th scope="row">${month}</th>
-${Object.keys(fixed.totals).map((k) => `<td colspan="2" style="padding-right: 14px;"><div class="tk-time-tracker-cel"><div class="tk-hours">${fixed.totals[k][month] / 8} days</div></div></td>`).join('')}
+${Object.keys(fixed.totals).map((k) => `<td colspan="2" style="padding-right: 14px;"><div class="tk-time-tracker-cel"><div class="tk-hours">${(fixed.totals[k][month] || 0) / 8} days</div></div></td>`).join('')}
 </tr>`
             }
 
@@ -142,9 +180,22 @@ ${Object.keys(fixed.totals).map((k) => `<td colspan="2" style="padding-right: 14
         return;
     }
 
-    const url = `https://app.10000ft.com/api/v1/users/${userId}/time_entries?fields=approvals&from=${fromFmt}&page=1&per_page=1000&to=${toFmt}&with_suggestions=true`;
-    fetch(url, { credentials: 'include' })
-        .then((res) => res.json())
-        .then((body) => report(body.data));
+    const timeEntriesUrl = `https://app.10000ft.com/api/v1/users/${userId}/time_entries?fields=approvals&from=${fromFmt}&page=1&per_page=1000&to=${toFmt}&with_suggestions=true`;
+    const timeEntriesPromise = fetch(timeEntriesUrl, { credentials: 'include' }).then((res) => res.json());
 
+    const projectsUrl = `https://app.10000ft.com/api/v1/users/${userId}/projects?with_archived=true&per_page=100&with_phases=true`;
+    const projectsPromise = fetch(projectsUrl, { credentials: 'include' }).then((res) => res.json());
+
+    const leaveTypesUrl = `https://app.10000ft.com/api/v1/leave_types?page=1&with_archived=true`;
+    const leaveTypesPromise = fetch(leaveTypesUrl, { credentials: 'include' }).then((res) => res.json());
+
+    Promise.all([timeEntriesPromise, projectsPromise, leaveTypesPromise])
+        .then(([timeEntriesRes, projectsRes, laveTypesRes]) => {
+
+            report({
+                timeEntries: timeEntriesRes.data,
+                projects: projectsRes.data,
+                leaveTypes: laveTypesRes.data
+            })
+        });
 })();
