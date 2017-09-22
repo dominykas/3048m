@@ -4,13 +4,17 @@
     // avoid relying on npm :trollface:
     const leftPad = (str, n) => '0'.repeat(n - ('' + str).length) + str;
 
+    const isoDate = (date) => `${date.getFullYear()}-${leftPad(date.getMonth() + 1, 2)}-${leftPad(date.getDate(), 2)}`;
+
     const now = new Date();
 
-    const from = new Date(now.getFullYear(), now.getMonth(), 1);
-    const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const queryFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1); // from start of previous month
+    const queryTo = new Date(now.getFullYear(), now.getMonth() + 2, 0); // till end of next month
 
-    const fromFmt = `${from.getFullYear()}-${from.getMonth() + 1}-${from.getDate()}`;
-    const toFmt = `${to.getFullYear()}-${to.getMonth() + 1}-${to.getDate()}`;
+    const today = isoDate(new Date());
+    const currentMonth = new Date().getMonth();
+    const displayFrom = new Date(Date.now() - 86400 * 31 * 1000);
+    const displayTo = new Date(Date.now() + 86400 * 7 * 1000);
 
     const report = ({ timeEntries, projects, leaveTypes }) => {
 
@@ -62,18 +66,19 @@
             totals: {}
         };
 
-        let day = from.getDate();
+        let day = queryFrom.getDate();
         let date;
         do {
-            date = new Date(from.getFullYear(), from.getMonth(), day);
-            const dateKey = `${date.getFullYear()}-${leftPad(date.getMonth() + 1, 2)}-${leftPad(date.getDate(), 2)}`;
+            date = new Date(queryFrom.getFullYear(), queryFrom.getMonth(), day);
+            const dateKey = isoDate(date);
             initialValue.data[dateKey] = {
                 weekday: date.getDay(),
-                lastOfMonth: new Date(from.getFullYear(), from.getMonth(), day + 1).getMonth() !== date.getMonth(),
+                date: date,
+                lastOfMonth: new Date(queryFrom.getFullYear(), queryFrom.getMonth(), day + 1).getMonth() !== date.getMonth(),
                 rows: []
             };
             day++;
-        } while (date < to);
+        } while (date < queryTo);
 
         const fixed = timeEntries.reduce((memo, row) => {
 
@@ -126,34 +131,47 @@
 
         const dataHtml = Object.keys(fixed.data).reduce((memo, date) => {
 
-            const d = fixed.data[date];
+            const rowData = fixed.data[date];
 
-            const columns = Object.keys(fixed.totals)
-                .map((k) => {
+            let row = '';
+            const displayRow = (rowData.date.getTime() >= displayFrom.getTime() && rowData.date.getTime() <= displayTo.getTime())
+                || (rowData.date.getMonth() === currentMonth);
 
-                    let hours = '';
-                    let notes = '';
-                    let hoursClass = '';
+            if (displayRow) {
+                const columns = Object.keys(fixed.totals)
+                    .map((k) => {
 
-                    if (fixed.data[date][k] && fixed.data[date][k].scheduled) {
-                        hours = fixed.data[date][k].scheduled;
-                    }
-                    if (fixed.data[date][k] && fixed.data[date][k].hours) {
-                        hours = fixed.data[date][k].hours;
-                        hoursClass = 'has-gradient confirmed ' + getProjectColor(k);
-                    }
-                    if (fixed.data[date][k] && fixed.data[date][k].notes) {
-                        notes = fixed.data[date][k].notes;
-                    }
+                        let hours = '';
+                        let notes = '';
+                        let hoursClass = '';
 
-                    return `<td class="tk-time-tracker-cel ${hoursClass}"><div class="tk-hours">${hours}</div></td><td style="padding-right: 14px;">${notes}</td>`;
-                }).join('');
+                        if (fixed.data[date][k] && fixed.data[date][k].scheduled) {
+                            hours = fixed.data[date][k].scheduled;
+                        }
+                        if (fixed.data[date][k] && fixed.data[date][k].hours) {
+                            hours = fixed.data[date][k].hours;
+                            hoursClass = 'has-gradient confirmed ' + getProjectColor(k);
+                        }
+                        if (fixed.data[date][k] && fixed.data[date][k].notes) {
+                            notes = fixed.data[date][k].notes;
+                        }
 
-            const row = `<tr class="tk-time-tracker-row" style="${d.weekday === 0 || d.weekday === 6 ? 'background-color: #f5f5f5' : ''}"><td style="white-space: nowrap;padding-right: 14px;">${date}</td>${columns}</tr>`;
+                        return `<td class="tk-time-tracker-cel ${hoursClass}"><div class="tk-hours">${hours}</div></td><td style="padding-right: 14px;">${notes}</td>`;
+                    }).join('');
+
+                let rowStyle = '';
+                if (rowData.weekday === 0 || rowData.weekday === 6) {
+                    rowStyle += 'background-color: #f5f5f5;';
+                }
+                if (date === today) {
+                    rowStyle += 'outline: 1px dotted #000;';
+                }
+
+                row = `<tr class="tk-time-tracker-row" style="${rowStyle}"><td style="white-space: nowrap;padding-right: 14px;">${date}</td>${columns}</tr>`;
+            }
 
             let totals = '';
-
-            if (d.lastOfMonth) {
+            if (rowData.lastOfMonth) {
                 const month = date.substr(0, 7);
                 totals = `<tr class="tk-time-tracker-row" style="background-color:#e5e5e5">
 <th scope="row">${month}</th>
@@ -180,7 +198,7 @@ ${Object.keys(fixed.totals).map((k) => `<td colspan="2" style="padding-right: 14
         return;
     }
 
-    const timeEntriesUrl = `https://app.10000ft.com/api/v1/users/${userId}/time_entries?fields=approvals&from=${fromFmt}&page=1&per_page=1000&to=${toFmt}&with_suggestions=true`;
+    const timeEntriesUrl = `https://app.10000ft.com/api/v1/users/${userId}/time_entries?fields=approvals&from=${isoDate(queryFrom)}&page=1&per_page=1000&to=${isoDate(queryTo)}&with_suggestions=true`;
     const timeEntriesPromise = fetch(timeEntriesUrl, { credentials: 'include' }).then((res) => res.json());
 
     const projectsUrl = `https://app.10000ft.com/api/v1/users/${userId}/projects?with_archived=true&per_page=100&with_phases=true`;
