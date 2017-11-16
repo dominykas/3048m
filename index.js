@@ -16,9 +16,36 @@
     const displayFrom = new Date(Date.now() - 86400 * 31 * 1000);
     const displayTo = new Date(Date.now() + 86400 * 7 * 1000);
 
-    const report = ({ timeEntries, projects, leaveTypes }) => {
+    const load = () => {
 
-        window.____data = { timeEntries, projects, leaveTypes };
+        const userId = window.whoami.id;
+
+        const timeEntriesUrl = `https://app.10000ft.com/api/v1/users/${userId}/time_entries?fields=approvals&from=${isoDate(queryFrom)}&page=1&per_page=1000&to=${isoDate(queryTo)}&with_suggestions=true`;
+        const timeEntriesPromise = fetch(timeEntriesUrl, { credentials: 'include' }).then((res) => res.json());
+
+        const projectsUrl = `https://app.10000ft.com/api/v1/users/${userId}/projects?with_archived=true&per_page=100&with_phases=true`;
+        const projectsPromise = fetch(projectsUrl, { credentials: 'include' }).then((res) => res.json());
+
+        const leaveTypesUrl = `https://app.10000ft.com/api/v1/leave_types?page=1&with_archived=true`;
+        const leaveTypesPromise = fetch(leaveTypesUrl, { credentials: 'include' }).then((res) => res.json());
+
+        const existing = document.getElementById('results-3048m');
+        if (existing) {
+            existing.style.opacity = '0.3';
+        }
+
+        Promise.all([timeEntriesPromise, projectsPromise, leaveTypesPromise])
+            .then(([timeEntriesRes, projectsRes, laveTypesRes]) => {
+
+                report({
+                    timeEntries: timeEntriesRes.data,
+                    projects: projectsRes.data,
+                    leaveTypes: laveTypesRes.data
+                })
+            });
+    };
+
+    const report = ({ timeEntries, projects, leaveTypes }) => {
 
         const getProjectHeading = (projectKey) => {
 
@@ -182,7 +209,13 @@ ${Object.keys(fixed.totals).map((k) => `<td colspan="2" style="padding-right: 14
             return memo + row + totals;
         }, '');
 
-        const html = `<table style="clear: both;" class="widget-wrapper"><thead>${headingsHtml}</thead><tbody class="tk-time-tracker">${dataHtml}</tbody></table>`;
+        const html = `<table id="results-3048m" style="clear: both;" class="widget-wrapper"><thead>${headingsHtml}</thead><tbody class="tk-time-tracker">${dataHtml}</tbody></table>`;
+
+        const existing = document.getElementById('results-3048m');
+        if (existing) {
+            existing.parentNode.removeChild(existing);
+        }
+
         document.querySelector('#personPageMainContentAreaTimeTracker').insertAdjacentHTML('beforebegin', html);
     };
 
@@ -191,29 +224,5 @@ ${Object.keys(fixed.totals).map((k) => `<td colspan="2" style="padding-right: 14
         return;
     }
 
-    const userId = window.whoami.id;
-
-    if (window.____data) {
-        report(____data);
-        return;
-    }
-
-    const timeEntriesUrl = `https://app.10000ft.com/api/v1/users/${userId}/time_entries?fields=approvals&from=${isoDate(queryFrom)}&page=1&per_page=1000&to=${isoDate(queryTo)}&with_suggestions=true`;
-    const timeEntriesPromise = fetch(timeEntriesUrl, { credentials: 'include' }).then((res) => res.json());
-
-    const projectsUrl = `https://app.10000ft.com/api/v1/users/${userId}/projects?with_archived=true&per_page=100&with_phases=true`;
-    const projectsPromise = fetch(projectsUrl, { credentials: 'include' }).then((res) => res.json());
-
-    const leaveTypesUrl = `https://app.10000ft.com/api/v1/leave_types?page=1&with_archived=true`;
-    const leaveTypesPromise = fetch(leaveTypesUrl, { credentials: 'include' }).then((res) => res.json());
-
-    Promise.all([timeEntriesPromise, projectsPromise, leaveTypesPromise])
-        .then(([timeEntriesRes, projectsRes, laveTypesRes]) => {
-
-            report({
-                timeEntries: timeEntriesRes.data,
-                projects: projectsRes.data,
-                leaveTypes: laveTypesRes.data
-            })
-        });
+    load();
 })();
