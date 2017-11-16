@@ -70,7 +70,11 @@
             return projectKey;
         };
 
-        const getProjectColor = function (projectKey) {
+        const getHoursColor = function (projectKey, hasError) {
+
+            if (hasError) {
+                return 'grad-red';
+            }
 
             if (projectKey.startsWith('LeaveType-')) {
                 return 'grad-orange';
@@ -135,9 +139,15 @@
                 data[row.date][id] = { scheduled: row.scheduled_hours };
             }
             else {
-                data[row.date][id] = {};
+                if (data[row.date][id] && data[row.date][id].hours > 0 && row.hours > 0) {
+                    data[row.date][id].error = true;
+                }
+                else {
+                    data[row.date][id] = {};
+                }
+
                 if (row.hours > 0) {
-                    data[row.date][id].hours = row.hours;
+                    data[row.date][id].hours = (data[row.date][id].hours || 0) + row.hours;
                     totals[id][`${y}-${m}`] += row.hours;
                 }
                 if (row.notes !== null) {
@@ -177,7 +187,7 @@
                         }
                         if (fixed.data[date][k] && fixed.data[date][k].hours) {
                             hours = fixed.data[date][k].hours;
-                            hoursClass = 'has-gradient confirmed ' + getProjectColor(k);
+                            hoursClass = 'has-gradient confirmed ' + getHoursColor(k, fixed.data[date][k].error);
                         }
                         if (fixed.data[date][k] && fixed.data[date][k].notes) {
                             notes = fixed.data[date][k].notes;
