@@ -16,9 +16,36 @@
     const displayFrom = new Date(Date.now() - 86400 * 31 * 1000);
     const displayTo = new Date(Date.now() + 86400 * 7 * 1000);
 
-    const report = ({ timeEntries, projects, leaveTypes }) => {
+    const load = () => {
 
-        window.____data = { timeEntries, projects, leaveTypes };
+        const userId = window.whoami.id;
+
+        const timeEntriesUrl = `https://app.10000ft.com/api/v1/users/${userId}/time_entries?fields=approvals&from=${isoDate(queryFrom)}&page=1&per_page=1000&to=${isoDate(queryTo)}&with_suggestions=true`;
+        const timeEntriesPromise = fetch(timeEntriesUrl, { credentials: 'include' }).then((res) => res.json());
+
+        const projectsUrl = `https://app.10000ft.com/api/v1/users/${userId}/projects?with_archived=true&per_page=100&with_phases=true`;
+        const projectsPromise = fetch(projectsUrl, { credentials: 'include' }).then((res) => res.json());
+
+        const leaveTypesUrl = `https://app.10000ft.com/api/v1/leave_types?page=1&with_archived=true`;
+        const leaveTypesPromise = fetch(leaveTypesUrl, { credentials: 'include' }).then((res) => res.json());
+
+        const existing = document.getElementById('results-3048m');
+        if (existing) {
+            existing.style.opacity = '0.3';
+        }
+
+        Promise.all([timeEntriesPromise, projectsPromise, leaveTypesPromise])
+            .then(([timeEntriesRes, projectsRes, laveTypesRes]) => {
+
+                report({
+                    timeEntries: timeEntriesRes.data,
+                    projects: projectsRes.data,
+                    leaveTypes: laveTypesRes.data
+                })
+            });
+    };
+
+    const report = ({ timeEntries, projects, leaveTypes }) => {
 
         const getProjectHeading = (projectKey) => {
 
@@ -43,7 +70,11 @@
             return projectKey;
         };
 
-        const getProjectColor = function (projectKey) {
+        const getHoursColor = function (projectKey, hasError) {
+
+            if (hasError) {
+                return 'grad-red';
+            }
 
             if (projectKey.startsWith('LeaveType-')) {
                 return 'grad-orange';
@@ -108,9 +139,15 @@
                 data[row.date][id] = { scheduled: row.scheduled_hours };
             }
             else {
-                data[row.date][id] = {};
+                if (data[row.date][id] && data[row.date][id].hours > 0 && row.hours > 0) {
+                    data[row.date][id].error = true;
+                }
+                else {
+                    data[row.date][id] = {};
+                }
+
                 if (row.hours > 0) {
-                    data[row.date][id].hours = row.hours;
+                    data[row.date][id].hours = (data[row.date][id].hours || 0) + row.hours;
                     totals[id][`${y}-${m}`] += row.hours;
                 }
                 if (row.notes !== null) {
@@ -132,6 +169,7 @@
         const dataHtml = Object.keys(fixed.data).reduce((memo, date) => {
 
             const rowData = fixed.data[date];
+            const rowHours = Object.keys(rowData).reduce((sum, k) => sum + (rowData[k] && rowData[k].hours || 0), 0);
 
             let row = '';
             const displayRow = (rowData.date.getTime() >= displayFrom.getTime() && rowData.date.getTime() <= displayTo.getTime())
@@ -145,15 +183,19 @@
                         let notes = '';
                         let hoursClass = '';
 
-                        if (fixed.data[date][k] && fixed.data[date][k].scheduled) {
-                            hours = fixed.data[date][k].scheduled;
+                        if (rowData[k] && rowData[k].scheduled && rowHours <= 0) {
+                            hours = rowData[k].scheduled;
                         }
-                        if (fixed.data[date][k] && fixed.data[date][k].hours) {
-                            hours = fixed.data[date][k].hours;
-                            hoursClass = 'has-gradient confirmed ' + getProjectColor(k);
+                        if (rowData[k] && rowData[k].hours) {
+                            hours = rowData[k].hours;
+                            hoursClass = 'has-gradient confirmed ' + getHoursColor(k, rowData[k].error);
                         }
-                        if (fixed.data[date][k] && fixed.data[date][k].notes) {
-                            notes = fixed.data[date][k].notes;
+                        if (rowData[k] && rowData[k].notes) {
+                            notes = rowData[k].notes;
+                        }
+
+                        if (rowData[k] && rowData[k].error) {
+                            notes += ' <span style="color: #999;font-size: 10px;">Fix multiple entries in "Day" view</span>'
                         }
 
                         return `<td class="tk-time-tracker-cel ${hoursClass}"><div class="tk-hours">${hours}</div></td><td style="padding-right: 14px;">${notes}</td>`;
@@ -182,7 +224,13 @@ ${Object.keys(fixed.totals).map((k) => `<td colspan="2" style="padding-right: 14
             return memo + row + totals;
         }, '');
 
-        const html = `<table style="clear: both;" class="widget-wrapper"><thead>${headingsHtml}</thead><tbody class="tk-time-tracker">${dataHtml}</tbody></table>`;
+        const html = `<table id="results-3048m" style="clear: both;" class="widget-wrapper"><thead>${headingsHtml}</thead><tbody class="tk-time-tracker">${dataHtml}</tbody></table>`;
+
+        const existing = document.getElementById('results-3048m');
+        if (existing) {
+            existing.parentNode.removeChild(existing);
+        }
+
         document.querySelector('#personPageMainContentAreaTimeTracker').insertAdjacentHTML('beforebegin', html);
     };
 
@@ -191,29 +239,5 @@ ${Object.keys(fixed.totals).map((k) => `<td colspan="2" style="padding-right: 14
         return;
     }
 
-    const userId = window.whoami.id;
-
-    if (window.____data) {
-        report(____data);
-        return;
-    }
-
-    const timeEntriesUrl = `https://app.10000ft.com/api/v1/users/${userId}/time_entries?fields=approvals&from=${isoDate(queryFrom)}&page=1&per_page=1000&to=${isoDate(queryTo)}&with_suggestions=true`;
-    const timeEntriesPromise = fetch(timeEntriesUrl, { credentials: 'include' }).then((res) => res.json());
-
-    const projectsUrl = `https://app.10000ft.com/api/v1/users/${userId}/projects?with_archived=true&per_page=100&with_phases=true`;
-    const projectsPromise = fetch(projectsUrl, { credentials: 'include' }).then((res) => res.json());
-
-    const leaveTypesUrl = `https://app.10000ft.com/api/v1/leave_types?page=1&with_archived=true`;
-    const leaveTypesPromise = fetch(leaveTypesUrl, { credentials: 'include' }).then((res) => res.json());
-
-    Promise.all([timeEntriesPromise, projectsPromise, leaveTypesPromise])
-        .then(([timeEntriesRes, projectsRes, laveTypesRes]) => {
-
-            report({
-                timeEntries: timeEntriesRes.data,
-                projects: projectsRes.data,
-                leaveTypes: laveTypesRes.data
-            })
-        });
+    load();
 })();
