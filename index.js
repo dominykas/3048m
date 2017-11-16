@@ -169,6 +169,7 @@
         const dataHtml = Object.keys(fixed.data).reduce((memo, date) => {
 
             const rowData = fixed.data[date];
+            const rowHours = Object.keys(rowData).reduce((sum, k) => sum + (rowData[k] && rowData[k].hours || 0), 0);
 
             let row = '';
             const displayRow = (rowData.date.getTime() >= displayFrom.getTime() && rowData.date.getTime() <= displayTo.getTime())
@@ -182,18 +183,18 @@
                         let notes = '';
                         let hoursClass = '';
 
-                        if (fixed.data[date][k] && fixed.data[date][k].scheduled) {
-                            hours = fixed.data[date][k].scheduled;
+                        if (rowData[k] && rowData[k].scheduled && rowHours <= 0) {
+                            hours = rowData[k].scheduled;
                         }
-                        if (fixed.data[date][k] && fixed.data[date][k].hours) {
-                            hours = fixed.data[date][k].hours;
-                            hoursClass = 'has-gradient confirmed ' + getHoursColor(k, fixed.data[date][k].error);
+                        if (rowData[k] && rowData[k].hours) {
+                            hours = rowData[k].hours;
+                            hoursClass = 'has-gradient confirmed ' + getHoursColor(k, rowData[k].error);
                         }
-                        if (fixed.data[date][k] && fixed.data[date][k].notes) {
-                            notes = fixed.data[date][k].notes;
+                        if (rowData[k] && rowData[k].notes) {
+                            notes = rowData[k].notes;
                         }
 
-                        if (fixed.data[date][k] && fixed.data[date][k].error) {
+                        if (rowData[k] && rowData[k].error) {
                             notes += ' <span style="color: #999;font-size: 10px;">Fix multiple entries in "Day" view</span>'
                         }
 
