@@ -193,6 +193,10 @@
                             notes = fixed.data[date][k].notes;
                         }
 
+                        if (fixed.data[date][k] && fixed.data[date][k].error) {
+                            notes += ' <span style="color: #999;font-size: 10px;">Fix multiple entries in "Day" view</span>'
+                        }
+
                         return `<td class="tk-time-tracker-cel ${hoursClass}"><div class="tk-hours">${hours}</div></td><td style="padding-right: 14px;">${notes}</td>`;
                     }).join('');
 
