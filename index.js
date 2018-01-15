@@ -124,7 +124,7 @@ module.exports.load = function (userId, displayFrom, displayTo) {
         });
 };
 
-},{"./utils":4}],2:[function(require,module,exports){
+},{"./utils":5}],2:[function(require,module,exports){
 'use strict';
 
 module.exports.table = require('./table.ejs');
@@ -160,10 +160,9 @@ function encode_char(c) {
     ; __append("</th>\n            ")
     ;  }); 
     ; __append("\n        </tr>\n    </thead>\n\n    <tbody class=\"tk-time-tracker\">\n        ")
-    ;  Utils.forEach(timeEntries.data, (dateKey, dayData) => {
+    ;  Utils.forEach(timeEntries.data, (dayData, dateKey) => {
 
-            const rowProjectData = dayData.projects;
-            const rowHours = Object.keys(rowProjectData).reduce((sum, projectKey) => sum + (rowProjectData[projectKey].hours || 0), 0);
+            const rowHours = Object.keys(dayData.projects).reduce((sum, projectKey) => sum + (dayData.projects[projectKey].hours || 0), 0);
         
     ; __append("\n\n        ")
     ;  if (dayData.display) { 
@@ -172,7 +171,7 @@ function encode_char(c) {
     ; __append("\">\n\n            <td style=\"white-space: nowrap;padding-right: 14px;\">")
     ; __append(escapeFn( dateKey ))
     ; __append("</td>\n\n            ")
-    ;  Utils.forEach(timeEntries.totals, (projectKey, projectData) => { 
+    ;  Object.keys(timeEntries.totals).forEach((projectKey) => { const projectData = dayData.projects[projectKey]; 
     ; __append("\n            <td class=\"")
     ; __append( Utils.getHourCellClass(projects, leaveTypes, projectKey, projectData) )
     ; __append("\"><div class=\"tk-hours\">\n                ")
@@ -206,8 +205,41 @@ function encode_char(c) {
   return __output.join("");
 
 })
-},{"../utils":4}],4:[function(require,module,exports){
+},{"../utils":5}],4:[function(require,module,exports){
 /* global document */
+'use strict';
+
+const Templates = require('./templates');
+
+exports.fadeout = () => {
+
+    const existing = document.getElementById('results-3048m');
+    if (!existing) {
+        return;
+    }
+
+    existing.style.opacity = '0.3';
+};
+
+exports.cleanup = () => {
+
+    const existing = document.getElementById('results-3048m');
+    if (!existing) {
+        return;
+    }
+
+    existing.parentNode.removeChild(existing);
+};
+
+exports.render = (data) => {
+
+    const html = Templates.table(data);
+
+    document.querySelector('#personPageMainContentAreaTimeTracker')
+        .insertAdjacentHTML('beforebegin', html);
+};
+
+},{"./templates":2}],5:[function(require,module,exports){
 'use strict';
 
 // avoid relying on npm :trollface:
@@ -216,6 +248,10 @@ exports.leftPad = (str, n) => '0'.repeat(n - ('' + str).length) + str;
 exports.isoDate = (date) => `${date.getFullYear()}-${exports.leftPad(date.getMonth() + 1, 2)}-${exports.leftPad(date.getDate(), 2)}`;
 
 exports.forEach = (object, callback) => {
+
+    if (!object) {
+        return;
+    }
 
     Object.keys(object).forEach((k) => callback(object[k], k));
 };
@@ -302,33 +338,11 @@ exports.getRowStyle = ({ weekday, today }) => {
     return rowStyle;
 };
 
-exports.existingTableFadeout = function () {
-
-    const existing = document.getElementById('results-3048m');
-    if (!existing) {
-        return;
-    }
-
-    existing.style.opacity = '0.3';
-};
-
-exports.existingTableRemove = function () {
-
-    const existing = document.getElementById('results-3048m');
-    if (!existing) {
-        return;
-    }
-
-    existing.parentNode.removeChild(existing);
-};
-
-},{}],5:[function(require,module,exports){
-/* global document */
+},{}],6:[function(require,module,exports){
 'use strict';
 
 const Data = require('./data');
-const Templates = require('./templates');
-const Utils = require('./utils');
+const Ui = require('./ui');
 
 if (!window.whoami) {
     window.alert('Are you on 10kft? And logged in?');
@@ -339,15 +353,11 @@ const userId = window.whoami.id;
 const displayFrom = new Date(Date.now() - 86400 * 31 * 1000);
 const displayTo = new Date(Date.now() + 86400 * 7 * 1000);
 
-Utils.existingTableFadeout();
-Data.load(userId, displayFrom, displayTo).then(({ timeEntries, projects, leaveTypes }) => {
+Ui.fadeout();
+Data.load(userId, displayFrom, displayTo).then((data) => {
 
-    Utils.existingTableRemove();
-
-    const html = Templates.table({ timeEntries, projects, leaveTypes });
-
-    document.querySelector('#personPageMainContentAreaTimeTracker')
-        .insertAdjacentHTML('beforebegin', html);
+    Ui.cleanup();
+    Ui.render(data);
 });
 
-},{"./data":1,"./templates":2,"./utils":4}]},{},[5]);
+},{"./data":1,"./ui":4}]},{},[6]);
