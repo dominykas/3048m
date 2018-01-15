@@ -5,22 +5,33 @@
 
 const Utils = require('./utils');
 
-const getInitialValue = function (queryFrom, queryTo) {
+const getInitialValue = function ({ queryFrom, queryTo, displayFrom, displayTo }) {
 
     const initialValue = {
         data: {},
         totals: {}
     };
 
+    const now = new Date();
+    const todayKey = Utils.isoDate(now);
+
     let day = queryFrom.getDate();
     let date;
     do {
         date = new Date(queryFrom.getFullYear(), queryFrom.getMonth(), day);
+
         const dateKey = Utils.isoDate(date);
+        const nextDayAfterDate = new Date(queryFrom.getFullYear(), queryFrom.getMonth(), day + 1);
+
+        const currentMonth = date.getMonth() === now.getMonth();
+        const inDisplayRange = date.getTime() >= displayFrom.getTime() && date.getTime() <= displayTo.getTime();
+
         initialValue.data[dateKey] = {
+            today: dateKey === todayKey,
             weekday: date.getDay(),
             date,
-            lastOfMonth: new Date(queryFrom.getFullYear(), queryFrom.getMonth(), day + 1).getMonth() !== date.getMonth(),
+            display: inDisplayRange || currentMonth,
+            lastOfMonth: date.getMonth() !== nextDayAfterDate.getMonth(),
             rows: []
         };
         day++;
@@ -29,7 +40,7 @@ const getInitialValue = function (queryFrom, queryTo) {
     return initialValue;
 };
 
-const transformTimeEntries = function (queryFrom, queryTo, timeEntries) {
+const transformTimeEntries = function (query, timeEntries) {
 
     return timeEntries.reduce((memo, row) => {
 
@@ -76,10 +87,13 @@ const transformTimeEntries = function (queryFrom, queryTo, timeEntries) {
         }
 
         return memo;
-    }, getInitialValue(queryFrom, queryTo));
+    }, getInitialValue(query));
 };
 
-module.exports.load = function (userId, queryFrom, queryTo) {
+module.exports.load = function (userId, displayFrom, displayTo) {
+
+    const queryFrom = new Date(displayFrom.getFullYear(), displayFrom.getMonth(), 1); // from start of displayable month
+    const queryTo = new Date(displayTo.getFullYear(), displayTo.getMonth() + 2, 0); // till end of month after displayable month
 
     const timeEntriesUrl = `https://app.10000ft.com/api/v1/users/${userId}/time_entries?fields=approvals&from=${Utils.isoDate(queryFrom)}&page=1&per_page=1000&to=${Utils.isoDate(queryTo)}&with_suggestions=true`;
     const timeEntriesPromise = fetch(timeEntriesUrl, { credentials: 'include' }).then((res) => res.json());
@@ -99,7 +113,7 @@ module.exports.load = function (userId, queryFrom, queryTo) {
         .then(([timeEntriesRes, projectsRes, laveTypesRes]) => {
 
             return {
-                timeEntries: transformTimeEntries(queryFrom, queryTo, timeEntriesRes.data),
+                timeEntries: transformTimeEntries({ queryFrom, queryTo, displayFrom, displayTo }, timeEntriesRes.data),
                 projects: projectsRes.data,
                 leaveTypes: laveTypesRes.data
             };
@@ -210,17 +224,7 @@ const Data = require('./data');
 const Templates = require('./templates');
 const Utils = require('./utils');
 
-const now = new Date();
-
-const queryFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1); // from start of previous month
-const queryTo = new Date(now.getFullYear(), now.getMonth() + 2, 0); // till end of next month
-
 const getDataHtml = function (projects, leaveTypes, entries) {
-
-    const today = Utils.isoDate(new Date());
-    const currentMonth = new Date().getMonth();
-    const displayFrom = new Date(Date.now() - 86400 * 31 * 1000);
-    const displayTo = new Date(Date.now() + 86400 * 7 * 1000);
 
     const dataHtml = Object.keys(entries.data).reduce((memo, dateKey) => {
 
@@ -228,10 +232,8 @@ const getDataHtml = function (projects, leaveTypes, entries) {
         const rowHours = Object.keys(rowData).reduce((sum, k) => sum + (rowData[k] && rowData[k].hours || 0), 0);
 
         let row = '';
-        const displayRow = (rowData.date.getTime() >= displayFrom.getTime() && rowData.date.getTime() <= displayTo.getTime())
-            || (rowData.date.getMonth() === currentMonth);
 
-        if (displayRow) {
+        if (rowData.display) {
             const columns = Object.keys(entries.totals)
                 .map((k) => {
 
@@ -261,7 +263,7 @@ const getDataHtml = function (projects, leaveTypes, entries) {
             if (rowData.weekday === 0 || rowData.weekday === 6) {
                 rowStyle += 'background-color: #f5f5f5;';
             }
-            if (dateKey === today) {
+            if (rowData.today) {
                 rowStyle += 'outline: 1px dotted #000;';
             }
 
@@ -287,7 +289,11 @@ if (!window.whoami) {
     return;
 }
 
-Data.load(window.whoami.id, queryFrom, queryTo)
+const userId = window.whoami.id;
+const displayFrom = new Date(Date.now() - 86400 * 31 * 1000);
+const displayTo = new Date(Date.now() + 86400 * 7 * 1000);
+
+Data.load(userId, displayFrom, displayTo)
     .then(({ timeEntries, projects, leaveTypes }) => {
 
         const dataHtml = getDataHtml(projects, leaveTypes, timeEntries);
