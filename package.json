@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "eslint .",
-    "build": "browserify lib -o index.js",
+    "build": "browserify -t ejsify lib -o index.js",
     "pre-commit": "npm run build && npm run test && git add -A index.js"
   },
   "repository": {
