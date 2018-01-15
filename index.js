@@ -1,5 +1,7 @@
+/* global document, fetch, alert */
+'use strict';
+
 (() => {
-    'use strict';
 
     // avoid relying on npm :trollface:
     const leftPad = (str, n) => '0'.repeat(n - ('' + str).length) + str;
@@ -41,7 +43,7 @@
                     timeEntries: timeEntriesRes.data,
                     projects: projectsRes.data,
                     leaveTypes: laveTypesRes.data
-                })
+                });
             });
     };
 
@@ -104,7 +106,7 @@
             const dateKey = isoDate(date);
             initialValue.data[dateKey] = {
                 weekday: date.getDay(),
-                date: date,
+                date,
                 lastOfMonth: new Date(queryFrom.getFullYear(), queryFrom.getMonth(), day + 1).getMonth() !== date.getMonth(),
                 rows: []
             };
@@ -129,7 +131,7 @@
                 totals[id] = {};
             }
 
-            const [y, m, d] = row.date.split('-');
+            const [y, m] = row.date.split('-');
 
             if (!totals[id][`${y}-${m}`]) {
                 totals[id][`${y}-${m}`] = 0;
@@ -166,9 +168,9 @@
     ${Object.keys(fixed.totals).map((k) => `<th colspan="2" style="padding-right: 14px;">${getProjectHeading(k)}</th>`).join('')}
 </tr>`;
 
-        const dataHtml = Object.keys(fixed.data).reduce((memo, date) => {
+        const dataHtml = Object.keys(fixed.data).reduce((memo, dateKey) => {
 
-            const rowData = fixed.data[date];
+            const rowData = fixed.data[dateKey];
             const rowHours = Object.keys(rowData).reduce((sum, k) => sum + (rowData[k] && rowData[k].hours || 0), 0);
 
             let row = '';
@@ -195,7 +197,7 @@
                         }
 
                         if (rowData[k] && rowData[k].error) {
-                            notes += ' <span style="color: #999;font-size: 10px;">Fix multiple entries in "Day" view</span>'
+                            notes += ' <span style="color: #999;font-size: 10px;">Fix multiple entries in "Day" view</span>';
                         }
 
                         return `<td class="tk-time-tracker-cel ${hoursClass}"><div class="tk-hours">${hours}</div></td><td style="padding-right: 14px;">${notes}</td>`;
@@ -205,20 +207,20 @@
                 if (rowData.weekday === 0 || rowData.weekday === 6) {
                     rowStyle += 'background-color: #f5f5f5;';
                 }
-                if (date === today) {
+                if (dateKey === today) {
                     rowStyle += 'outline: 1px dotted #000;';
                 }
 
-                row = `<tr class="tk-time-tracker-row" style="${rowStyle}"><td style="white-space: nowrap;padding-right: 14px;">${date}</td>${columns}</tr>`;
+                row = `<tr class="tk-time-tracker-row" style="${rowStyle}"><td style="white-space: nowrap;padding-right: 14px;">${dateKey}</td>${columns}</tr>`;
             }
 
             let totals = '';
             if (rowData.lastOfMonth) {
-                const month = date.substr(0, 7);
+                const month = dateKey.substr(0, 7);
                 totals = `<tr class="tk-time-tracker-row" style="background-color:#e5e5e5">
 <th scope="row">${month}</th>
 ${Object.keys(fixed.totals).map((k) => `<td colspan="2" style="padding-right: 14px;"><div class="tk-time-tracker-cel"><div class="tk-hours">${(fixed.totals[k][month] || 0) / 8} days</div></div></td>`).join('')}
-</tr>`
+</tr>`;
             }
 
             return memo + row + totals;
