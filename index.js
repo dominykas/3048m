@@ -1,243 +1,407 @@
-(() => {
-    'use strict';
+(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+/* global fetch */
+'use strict';
 
-    // avoid relying on npm :trollface:
-    const leftPad = (str, n) => '0'.repeat(n - ('' + str).length) + str;
+const Utils = require('./utils');
 
-    const isoDate = (date) => `${date.getFullYear()}-${leftPad(date.getMonth() + 1, 2)}-${leftPad(date.getDate(), 2)}`;
+const getInitialValue = function ({ queryFrom, queryTo, displayFrom, displayTo }) {
+
+    const initialValue = {
+        data: {},
+        totals: {}
+    };
 
     const now = new Date();
+    const todayKey = Utils.isoDate(now);
 
-    const queryFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1); // from start of previous month
-    const queryTo = new Date(now.getFullYear(), now.getMonth() + 2, 0); // till end of next month
+    let day = queryFrom.getDate();
+    let date;
+    do {
+        date = new Date(queryFrom.getFullYear(), queryFrom.getMonth(), day);
 
-    const today = isoDate(new Date());
-    const currentMonth = new Date().getMonth();
-    const displayFrom = new Date(Date.now() - 86400 * 31 * 1000);
-    const displayTo = new Date(Date.now() + 86400 * 7 * 1000);
+        const dateKey = Utils.isoDate(date);
+        const nextDayAfterDate = new Date(queryFrom.getFullYear(), queryFrom.getMonth(), day + 1);
 
-    const load = () => {
+        const currentMonth = date.getMonth() === now.getMonth();
+        const inDisplayRange = date.getTime() >= displayFrom.getTime() && date.getTime() <= displayTo.getTime();
 
-        const userId = window.whoami.id;
+        initialValue.data[dateKey] = {
 
-        const timeEntriesUrl = `https://app.10000ft.com/api/v1/users/${userId}/time_entries?fields=approvals&from=${isoDate(queryFrom)}&page=1&per_page=1000&to=${isoDate(queryTo)}&with_suggestions=true`;
-        const timeEntriesPromise = fetch(timeEntriesUrl, { credentials: 'include' }).then((res) => res.json());
+            date,
 
-        const projectsUrl = `https://app.10000ft.com/api/v1/users/${userId}/projects?with_archived=true&per_page=100&with_phases=true`;
-        const projectsPromise = fetch(projectsUrl, { credentials: 'include' }).then((res) => res.json());
+            today: dateKey === todayKey,
+            weekday: date.getDay(),
+            month: dateKey.substr(0, 7),
 
-        const leaveTypesUrl = `https://app.10000ft.com/api/v1/leave_types?page=1&with_archived=true`;
-        const leaveTypesPromise = fetch(leaveTypesUrl, { credentials: 'include' }).then((res) => res.json());
+            display: inDisplayRange || currentMonth,
+            lastOfMonth: date.getMonth() !== nextDayAfterDate.getMonth(),
 
-        const existing = document.getElementById('results-3048m');
-        if (existing) {
-            existing.style.opacity = '0.3';
+            totalHours: 0,
+            projects: {},
+            rowsByProjects: {},
+            rows: []
+
+        };
+
+        day++;
+    } while (date < queryTo);
+
+    return initialValue;
+};
+
+const transformTimeEntries = function (query, timeEntries) {
+
+    const result = getInitialValue(query);
+
+    timeEntries.forEach((entry) => {
+
+        const dayData = result.data[entry.date];
+
+        dayData.rows.push(entry);
+
+        if (entry.hours === 0 && entry.notes === null) {
+            return;
         }
 
-        Promise.all([timeEntriesPromise, projectsPromise, leaveTypesPromise])
-            .then(([timeEntriesRes, projectsRes, laveTypesRes]) => {
+        const id = `${entry.assignable_type}-${entry.assignable_id}`;
 
-                report({
-                    timeEntries: timeEntriesRes.data,
-                    projects: projectsRes.data,
-                    leaveTypes: laveTypesRes.data
-                })
-            });
-    };
+        dayData.rowsByProjects[id] = dayData.rowsByProjects[id] || [];
+        dayData.rowsByProjects[id].push(entry);
 
-    const report = ({ timeEntries, projects, leaveTypes }) => {
+        if (!result.totals[id]) {
+            result.totals[id] = {};
+        }
 
-        const getProjectHeading = (projectKey) => {
+        if (!result.totals[id][dayData.month]) {
+            result.totals[id][dayData.month] = 0;
+        }
+    });
 
-            if (projectKey.startsWith('LeaveType-')) {
-                const leaveId = +projectKey.substr(10);
-                const leave = leaveTypes.find((p) => p.id === leaveId);
+    Utils.forEach(result.data, (dayData, dateKey) => {
 
-                if (leave) {
-                    return leave.name;
+        const { projects, rowsByProjects } = dayData;
+
+        Utils.forEach(rowsByProjects, (rows, projectKey) => {
+
+            const projectData = {};
+
+            const scheduleEntries = rows.filter((entry) => entry.is_suggestion);
+
+            if (scheduleEntries.length > 1) {
+                projectData.error = 'E_MULTIPLE_SCHEDULES';
+            }
+
+            if (scheduleEntries.length > 0) {
+                projectData.scheduled = scheduleEntries[0].scheduled_hours;
+            }
+
+            const hoursEntries = rows.filter((entry) => entry.hours > 0);
+
+            if (hoursEntries.length > 1) {
+                projectData.error = 'E_MULTIPLE_ENTRIES';
+            }
+
+            if (hoursEntries.length > 0) {
+
+                projectData.hours = hoursEntries.reduce((sum, { hours }) => sum + hours, 0);
+                result.totals[projectKey][dayData.month] += projectData.hours;
+                dayData.totalHours += projectData.hours;
+
+                if (hoursEntries[0].notes !== null) {
+                    projectData.notes = hoursEntries[0].notes;
                 }
             }
 
-            if (projectKey.startsWith('Project-')) {
-                const projectId = +projectKey.substr(8);
-                const project = projects.find((p) => p.id === projectId);
+            projects[projectKey] = projectData;
+        });
+    });
 
-                if (project) {
-                    return project.name;
-                }
-            }
+    return result;
+};
 
-            return projectKey;
-        };
+module.exports.load = function (userId, displayFrom, displayTo) {
 
-        const getHoursColor = function (projectKey, hasError) {
+    const queryFrom = new Date(displayFrom.getFullYear(), displayFrom.getMonth(), 1); // from start of displayable month
+    const queryTo = new Date(displayTo.getFullYear(), displayTo.getMonth() + 2, 0); // till end of month after displayable month
 
-            if (hasError) {
-                return 'grad-red';
-            }
+    const timeEntriesUrl = `https://app.10000ft.com/api/v1/users/${userId}/time_entries?fields=approvals&from=${Utils.isoDate(queryFrom)}&page=1&per_page=1000&to=${Utils.isoDate(queryTo)}&with_suggestions=true`;
+    const timeEntriesPromise = fetch(timeEntriesUrl, { credentials: 'include' }).then((res) => res.json());
 
-            if (projectKey.startsWith('LeaveType-')) {
-                return 'grad-orange';
-            }
+    const projectsUrl = `https://app.10000ft.com/api/v1/users/${userId}/projects?with_archived=true&per_page=100&with_phases=true`;
+    const projectsPromise = fetch(projectsUrl, { credentials: 'include' }).then((res) => res.json());
 
-            if (projectKey.startsWith('Project-')) {
-                const projectId = +projectKey.substr(8);
-                const project = projects.find((p) => p.id === projectId);
+    const leaveTypesUrl = `https://app.10000ft.com/api/v1/leave_types?page=1&with_archived=true`;
+    const leaveTypesPromise = fetch(leaveTypesUrl, { credentials: 'include' }).then((res) => res.json());
 
-                if (project && project.project_state === 'Internal') {
-                    return 'grad-purple';
-                }
-            }
+    return Promise.all([timeEntriesPromise, projectsPromise, leaveTypesPromise])
+        .then(([timeEntriesRes, projectsRes, laveTypesRes]) => {
 
-            return 'grad-blue';
-        };
-
-        const initialValue = {
-            data: {},
-            totals: {}
-        };
-
-        let day = queryFrom.getDate();
-        let date;
-        do {
-            date = new Date(queryFrom.getFullYear(), queryFrom.getMonth(), day);
-            const dateKey = isoDate(date);
-            initialValue.data[dateKey] = {
-                weekday: date.getDay(),
-                date: date,
-                lastOfMonth: new Date(queryFrom.getFullYear(), queryFrom.getMonth(), day + 1).getMonth() !== date.getMonth(),
-                rows: []
+            return {
+                timeEntries: transformTimeEntries({ queryFrom, queryTo, displayFrom, displayTo }, timeEntriesRes.data),
+                projects: projectsRes.data,
+                leaveTypes: laveTypesRes.data
             };
-            day++;
-        } while (date < queryTo);
+        });
+};
 
-        const fixed = timeEntries.reduce((memo, row) => {
+},{"./utils":9}],2:[function(require,module,exports){
+'use strict';
 
-            const data = memo.data;
-            const totals = memo.totals;
+const hourCellColor = (projects, leaveTypes, projectKey, hasError) => {
 
-            data[row.date].rows.push(row);
+    if (hasError) {
+        return 'grad-red';
+    }
 
-            if (row.hours === 0 && row.notes === null) {
-                // @todo: render these into a data-attribute?
-                return memo;
-            }
+    if (projectKey.startsWith('LeaveType-')) {
+        return 'grad-orange';
+    }
 
-            const id = `${row.assignable_type}-${row.assignable_id}`;
+    if (projectKey.startsWith('Project-')) {
+        const projectId = +projectKey.substr(8);
+        const project = projects.find((p) => p.id === projectId);
 
-            if (!totals[id]) {
-                totals[id] = {};
-            }
-
-            const [y, m, d] = row.date.split('-');
-
-            if (!totals[id][`${y}-${m}`]) {
-                totals[id][`${y}-${m}`] = 0;
-            }
-
-            if (row.is_suggestion && !data[row.date][`${id}-hours`]) {
-                data[row.date][id] = { scheduled: row.scheduled_hours };
-            }
-            else {
-                if (data[row.date][id] && data[row.date][id].hours > 0 && row.hours > 0) {
-                    data[row.date][id].error = true;
-                }
-                else {
-                    data[row.date][id] = {};
-                }
-
-                if (row.hours > 0) {
-                    data[row.date][id].hours = (data[row.date][id].hours || 0) + row.hours;
-                    totals[id][`${y}-${m}`] += row.hours;
-                }
-                if (row.notes !== null) {
-                    data[row.date][id].notes = row.notes;
-                }
-            }
-
-            return memo;
-        }, initialValue);
-
-        // console.table(fixed.data);
-        // console.table(fixed.totals);
-
-        const headingsHtml = `<tr>
-    <th>Date</th>
-    ${Object.keys(fixed.totals).map((k) => `<th colspan="2" style="padding-right: 14px;">${getProjectHeading(k)}</th>`).join('')}
-</tr>`;
-
-        const dataHtml = Object.keys(fixed.data).reduce((memo, date) => {
-
-            const rowData = fixed.data[date];
-            const rowHours = Object.keys(rowData).reduce((sum, k) => sum + (rowData[k] && rowData[k].hours || 0), 0);
-
-            let row = '';
-            const displayRow = (rowData.date.getTime() >= displayFrom.getTime() && rowData.date.getTime() <= displayTo.getTime())
-                || (rowData.date.getMonth() === currentMonth);
-
-            if (displayRow) {
-                const columns = Object.keys(fixed.totals)
-                    .map((k) => {
-
-                        let hours = '';
-                        let notes = '';
-                        let hoursClass = '';
-
-                        if (rowData[k] && rowData[k].scheduled && rowHours <= 0) {
-                            hours = rowData[k].scheduled;
-                        }
-                        if (rowData[k] && rowData[k].hours) {
-                            hours = rowData[k].hours;
-                            hoursClass = 'has-gradient confirmed ' + getHoursColor(k, rowData[k].error);
-                        }
-                        if (rowData[k] && rowData[k].notes) {
-                            notes = rowData[k].notes;
-                        }
-
-                        if (rowData[k] && rowData[k].error) {
-                            notes += ' <span style="color: #999;font-size: 10px;">Fix multiple entries in "Day" view</span>'
-                        }
-
-                        return `<td class="tk-time-tracker-cel ${hoursClass}"><div class="tk-hours">${hours}</div></td><td style="padding-right: 14px;">${notes}</td>`;
-                    }).join('');
-
-                let rowStyle = '';
-                if (rowData.weekday === 0 || rowData.weekday === 6) {
-                    rowStyle += 'background-color: #f5f5f5;';
-                }
-                if (date === today) {
-                    rowStyle += 'outline: 1px dotted #000;';
-                }
-
-                row = `<tr class="tk-time-tracker-row" style="${rowStyle}"><td style="white-space: nowrap;padding-right: 14px;">${date}</td>${columns}</tr>`;
-            }
-
-            let totals = '';
-            if (rowData.lastOfMonth) {
-                const month = date.substr(0, 7);
-                totals = `<tr class="tk-time-tracker-row" style="background-color:#e5e5e5">
-<th scope="row">${month}</th>
-${Object.keys(fixed.totals).map((k) => `<td colspan="2" style="padding-right: 14px;"><div class="tk-time-tracker-cel"><div class="tk-hours">${(fixed.totals[k][month] || 0) / 8} days</div></div></td>`).join('')}
-</tr>`
-            }
-
-            return memo + row + totals;
-        }, '');
-
-        const html = `<table id="results-3048m" style="clear: both;" class="widget-wrapper"><thead>${headingsHtml}</thead><tbody class="tk-time-tracker">${dataHtml}</tbody></table>`;
-
-        const existing = document.getElementById('results-3048m');
-        if (existing) {
-            existing.parentNode.removeChild(existing);
+        if (project && project.project_state === 'Internal') {
+            return 'grad-purple';
         }
+    }
 
-        document.querySelector('#personPageMainContentAreaTimeTracker').insertAdjacentHTML('beforebegin', html);
-    };
+    return 'grad-blue';
+};
 
-    if (!window.whoami) {
-        alert('Are you on 10kft? And logged in?');
+module.exports = (projects, leaveTypes, projectKey, projectData) => {
+
+    if (projectData && projectData.hours) {
+        return 'tk-time-tracker-cel has-gradient confirmed ' + hourCellColor(projects, leaveTypes, projectKey, projectData.error);
+    }
+
+    return 'tk-time-tracker-cel';
+};
+
+},{}],3:[function(require,module,exports){
+'use strict';
+
+exports.table = require('./table.ejs');
+
+exports.projectHeading = require('./projectHeading');
+exports.projectHours = require('./projectHours');
+exports.hourCellClass = require('./hourCellClass');
+exports.rowStyle = require('./rowStyle');
+
+},{"./hourCellClass":2,"./projectHeading":4,"./projectHours":5,"./rowStyle":6,"./table.ejs":7}],4:[function(require,module,exports){
+'use strict';
+
+module.exports = (projects, leaveTypes, projectKey) => {
+
+    if (projectKey.startsWith('LeaveType-')) {
+        const leaveId = +projectKey.substr(10);
+        const leave = leaveTypes.find((p) => p.id === leaveId);
+
+        if (leave) {
+            return leave.name;
+        }
+    }
+
+    if (projectKey.startsWith('Project-')) {
+        const projectId = +projectKey.substr(8);
+        const project = projects.find((p) => p.id === projectId);
+
+        if (project) {
+            return project.name;
+        }
+    }
+
+    return projectKey;
+};
+
+},{}],5:[function(require,module,exports){
+'use strict';
+
+module.exports = (projectData, rowHours) => {
+
+    if (projectData && projectData.hours) {
+        return projectData.hours;
+    }
+
+    if (projectData && projectData.scheduled && rowHours <= 0) {
+        return projectData.scheduled;
+    }
+
+    return '';
+};
+
+},{}],6:[function(require,module,exports){
+'use strict';
+
+module.exports = ({ weekday, today }) => {
+
+    let rowStyle = '';
+
+    if (weekday === 0 || weekday === 6) {
+        rowStyle += 'background-color: #f5f5f5;';
+    }
+
+    if (today) {
+        rowStyle += 'outline: 1px dotted #000;';
+    }
+
+    return rowStyle;
+};
+
+},{}],7:[function(require,module,exports){
+module.exports = (function anonymous(locals, escapeFn, include, rethrow
+/*``*/) {
+escapeFn = escapeFn || function (markup) {
+  return markup == undefined
+    ? ''
+    : String(markup)
+        .replace(_MATCH_HTML, encode_char);
+};
+var _ENCODE_HTML_RULES = {
+      "&": "&amp;"
+    , "<": "&lt;"
+    , ">": "&gt;"
+    , '"': "&#34;"
+    , "'": "&#39;"
+    }
+  , _MATCH_HTML = /[&<>'"]/g;
+function encode_char(c) {
+  return _ENCODE_HTML_RULES[c] || c;
+};
+;
+  var __output = [], __append = __output.push.bind(__output);
+  with (locals || {}) {
+    ;  const Utils = require('../utils'); 
+    ;  const Templates = require('../templates'); 
+    ; __append("\n\n<table id=\"results-3048m\" style=\"clear: both;\" class=\"widget-wrapper\">\n\n    <thead>\n        <tr>\n            <th>Date</th>\n            ")
+    ;  Object.keys(timeEntries.totals).forEach((k) => { 
+    ; __append("\n            <th colspan=\"2\" style=\"padding-right: 14px;\">")
+    ; __append(escapeFn( Templates.projectHeading(projects, leaveTypes, k) ))
+    ; __append("</th>\n            ")
+    ;  }); 
+    ; __append("\n        </tr>\n    </thead>\n\n    <tbody class=\"tk-time-tracker\">\n        ")
+    ;  Utils.forEach(timeEntries.data, (dayData, dateKey) => {
+
+            const rowHours = Object.keys(dayData.projects).reduce((sum, projectKey) => sum + (dayData.projects[projectKey].hours || 0), 0);
+        
+    ; __append("\n\n        ")
+    ;  if (dayData.display) { 
+    ; __append("\n        <tr class=\"tk-time-tracker-row\" style=\"")
+    ; __append(escapeFn( Templates.rowStyle(dayData) ))
+    ; __append("\">\n\n            <td style=\"white-space: nowrap;padding-right: 14px;\" title=\"")
+    ; __append(escapeFn( dayData.rows.map((row) => JSON.stringify(row)).join('\n\n') ))
+    ; __append("\">")
+    ; __append(escapeFn( dateKey ))
+    ; __append("</td>\n\n            ")
+    ;  Object.keys(timeEntries.totals).forEach((projectKey) => { const projectData = dayData.projects[projectKey]; 
+    ; __append("\n            <td class=\"")
+    ; __append( Templates.hourCellClass(projects, leaveTypes, projectKey, projectData) )
+    ; __append("\"><div class=\"tk-hours\">\n                ")
+    ; __append( Templates.projectHours(projectData, rowHours) )
+    ; __append("\n            </div></td>\n            <td style=\"padding-right: 14px;\">\n                ")
+    ; __append( projectData && projectData.notes || '' )
+    ; __append("\n                ")
+    ;  if (projectData && projectData.error === 'E_MULTIPLE_ENTRIES') { 
+    ; __append("\n                <span style=\"color: #999;font-size: 10px;\">Fix multiple entries in \"Day\" view</span>\n                ")
+    ;  } 
+    ; __append("\n                ")
+    ;  if (projectData && projectData.error === 'E_MULTIPLE_SCHEDULES') { 
+    ; __append("\n                <span style=\"color: #900;font-size: 10px;\">Multiple schedules available</span>\n                ")
+    ;  } 
+    ; __append("\n            </td>\n            ")
+    ;  }) 
+    ; __append("\n        </tr>\n        ")
+    ;  } 
+    ; __append("\n\n        ")
+    ;  if (dayData.lastOfMonth) { 
+    ; __append("\n        <tr class=\"tk-time-tracker-row\" style=\"background-color:#e5e5e5;\">\n\n            <th scope=\"row\">")
+    ; __append(escapeFn( dayData.month ))
+    ; __append("</th>\n\n            ")
+    ;  Object.keys(timeEntries.totals).forEach((k) => { 
+    ; __append("\n            <td colspan=\"2\" style=\"padding-right: 14px;\"><div class=\"tk-time-tracker-cel\"><div class=\"tk-hours\">")
+    ; __append(escapeFn( (timeEntries.totals[k][dayData.month] || 0) / 8 ))
+    ; __append(" days</div></div></td>\n            ")
+    ;  }); 
+    ; __append("\n        </tr>\n        ")
+    ;  } 
+    ; __append("\n\n        ")
+    ;  }); 
+    ; __append("\n    </tbody>\n\n</table>\n")
+  }
+  return __output.join("");
+
+})
+},{"../templates":3,"../utils":9}],8:[function(require,module,exports){
+/* global document */
+'use strict';
+
+const Templates = require('./templates');
+
+exports.fadeout = () => {
+
+    const existing = document.getElementById('results-3048m');
+    if (!existing) {
         return;
     }
 
-    load();
-})();
+    existing.style.opacity = '0.3';
+};
+
+exports.cleanup = () => {
+
+    const existing = document.getElementById('results-3048m');
+    if (!existing) {
+        return;
+    }
+
+    existing.parentNode.removeChild(existing);
+};
+
+exports.render = (data) => {
+
+    const html = Templates.table(data);
+
+    document.querySelector('#personPageMainContentAreaTimeTracker')
+        .insertAdjacentHTML('beforebegin', html);
+};
+
+},{"./templates":3}],9:[function(require,module,exports){
+'use strict';
+
+// avoid relying on npm :trollface:
+exports.leftPad = (str, n) => '0'.repeat(n - ('' + str).length) + str;
+
+exports.isoDate = (date) => `${date.getFullYear()}-${exports.leftPad(date.getMonth() + 1, 2)}-${exports.leftPad(date.getDate(), 2)}`;
+
+exports.forEach = (object, callback) => {
+
+    if (!object) {
+        return;
+    }
+
+    Object.keys(object).forEach((k) => callback(object[k], k));
+};
+
+},{}],10:[function(require,module,exports){
+'use strict';
+
+const Data = require('./data');
+const Ui = require('./ui');
+
+if (!window.whoami) {
+    window.alert('Are you on 10kft? And logged in?');
+    return;
+}
+
+const userId = window.whoami.id;
+const displayFrom = new Date(Date.now() - 86400 * 31 * 1000);
+const displayTo = new Date(Date.now() + 86400 * 7 * 1000);
+
+Ui.fadeout();
+Data.load(userId, displayFrom, displayTo).then((data) => {
+
+    Ui.cleanup();
+    Ui.render(data);
+});
+
+},{"./data":1,"./ui":8}]},{},[10]);

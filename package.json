@@ -1,0 +1,33 @@
+{
+  "name": "3048m",
+  "version": "0.0.0",
+  "description": "Visit [https://dominykas.github.io/3048m/](https://dominykas.github.io/3048m/) and drag <a href=\"javascript:(() => { const s = document.createElement('script'); s.src = 'https://rawgit.com/dominykas/3048m/master/index.js'; document.head.appendChild(s); })();\">`3048m`</a> to your bookmarks bar.",
+  "main": "index.js",
+  "scripts": {
+    "test": "eslint .",
+    "build": "browserify -t ejsify lib -o index.js",
+    "pre-commit": "npm run build && npm run test && git add -A index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dominykas/3048m.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/dominykas/3048m/issues"
+  },
+  "homepage": "https://github.com/dominykas/3048m#readme",
+  "devDependencies": {
+    "browserify": "15.x.x",
+    "ejs": "2.x.x",
+    "ejsify": "git://github.com/insidewarehouse/ejsify#ejs@2.x",
+    "eslint": "4.x.x",
+    "eslint-config-hapi": "11.x.x",
+    "eslint-plugin-hapi": "4.x.x",
+    "git-pre-hooks": "1.x.x"
+  },
+  "git-pre-hooks": {
+    "pre-commit": "npm run pre-commit"
+  }
+}

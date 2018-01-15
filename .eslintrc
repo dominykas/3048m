@@ -1,0 +1,10 @@
+{
+    "extends": "eslint-config-hapi",
+    "rules": {
+        "hapi/hapi-for-you": [1, { "maxDepth": 4, "startIterator": "i" }]
+    },
+    "globals": {
+        "window": true,
+        "gc": true
+    }
+}
