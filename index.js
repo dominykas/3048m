@@ -42,7 +42,7 @@ function encode_char(c) {
 // avoid relying on npm :trollface:
 const leftPad = (str, n) => '0'.repeat(n - ('' + str).length) + str;
 
-module.export.isoDate = (date) => `${date.getFullYear()}-${leftPad(date.getMonth() + 1, 2)}-${leftPad(date.getDate(), 2)}`;
+module.exports.isoDate = (date) => `${date.getFullYear()}-${leftPad(date.getMonth() + 1, 2)}-${leftPad(date.getDate(), 2)}`;
 
 },{}],4:[function(require,module,exports){
 /* global document, fetch, alert */
@@ -55,11 +55,6 @@ const now = new Date();
 
 const queryFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1); // from start of previous month
 const queryTo = new Date(now.getFullYear(), now.getMonth() + 2, 0); // till end of next month
-
-const today = Utils.isoDate(new Date());
-const currentMonth = new Date().getMonth();
-const displayFrom = new Date(Date.now() - 86400 * 31 * 1000);
-const displayTo = new Date(Date.now() + 86400 * 7 * 1000);
 
 const load = () => {
 
@@ -90,52 +85,7 @@ const load = () => {
         });
 };
 
-const report = ({ timeEntries, projects, leaveTypes }) => {
-
-    const getProjectHeading = (projectKey) => {
-
-        if (projectKey.startsWith('LeaveType-')) {
-            const leaveId = +projectKey.substr(10);
-            const leave = leaveTypes.find((p) => p.id === leaveId);
-
-            if (leave) {
-                return leave.name;
-            }
-        }
-
-        if (projectKey.startsWith('Project-')) {
-            const projectId = +projectKey.substr(8);
-            const project = projects.find((p) => p.id === projectId);
-
-            if (project) {
-                return project.name;
-            }
-        }
-
-        return projectKey;
-    };
-
-    const getHoursColor = function (projectKey, hasError) {
-
-        if (hasError) {
-            return 'grad-red';
-        }
-
-        if (projectKey.startsWith('LeaveType-')) {
-            return 'grad-orange';
-        }
-
-        if (projectKey.startsWith('Project-')) {
-            const projectId = +projectKey.substr(8);
-            const project = projects.find((p) => p.id === projectId);
-
-            if (project && project.project_state === 'Internal') {
-                return 'grad-purple';
-            }
-        }
-
-        return 'grad-blue';
-    };
+const getInitialValue = function () {
 
     const initialValue = {
         data: {},
@@ -155,6 +105,12 @@ const report = ({ timeEntries, projects, leaveTypes }) => {
         };
         day++;
     } while (date < queryTo);
+    return initialValue;
+};
+
+const transformTimeEntries = function (timeEntries) {
+
+    const initialValue = getInitialValue();
 
     const fixed = timeEntries.reduce((memo, row) => {
 
@@ -202,18 +158,41 @@ const report = ({ timeEntries, projects, leaveTypes }) => {
 
         return memo;
     }, initialValue);
+    return fixed;
+};
 
-    // console.table(fixed.data);
-    // console.table(fixed.totals);
+const getDataHtml = function (projects, entries) {
 
-    const headingsHtml = `<tr>
-<th>Date</th>
-${Object.keys(fixed.totals).map((k) => `<th colspan="2" style="padding-right: 14px;">${getProjectHeading(k)}</th>`).join('')}
-</tr>`;
+    const today = Utils.isoDate(new Date());
+    const currentMonth = new Date().getMonth();
+    const displayFrom = new Date(Date.now() - 86400 * 31 * 1000);
+    const displayTo = new Date(Date.now() + 86400 * 7 * 1000);
 
-    const dataHtml = Object.keys(fixed.data).reduce((memo, dateKey) => {
+    const getHoursColor = function (projectKey, hasError) {
 
-        const rowData = fixed.data[dateKey];
+        if (hasError) {
+            return 'grad-red';
+        }
+
+        if (projectKey.startsWith('LeaveType-')) {
+            return 'grad-orange';
+        }
+
+        if (projectKey.startsWith('Project-')) {
+            const projectId = +projectKey.substr(8);
+            const project = projects.find((p) => p.id === projectId);
+
+            if (project && project.project_state === 'Internal') {
+                return 'grad-purple';
+            }
+        }
+
+        return 'grad-blue';
+    };
+
+    const dataHtml = Object.keys(entries.data).reduce((memo, dateKey) => {
+
+        const rowData = entries.data[dateKey];
         const rowHours = Object.keys(rowData).reduce((sum, k) => sum + (rowData[k] && rowData[k].hours || 0), 0);
 
         let row = '';
@@ -221,7 +200,7 @@ ${Object.keys(fixed.totals).map((k) => `<th colspan="2" style="padding-right: 14
             || (rowData.date.getMonth() === currentMonth);
 
         if (displayRow) {
-            const columns = Object.keys(fixed.totals)
+            const columns = Object.keys(entries.totals)
                 .map((k) => {
 
                     let hours = '';
@@ -262,12 +241,57 @@ ${Object.keys(fixed.totals).map((k) => `<th colspan="2" style="padding-right: 14
             const month = dateKey.substr(0, 7);
             totals = `<tr class="tk-time-tracker-row" style="background-color:#e5e5e5">
 <th scope="row">${month}</th>
-${Object.keys(fixed.totals).map((k) => `<td colspan="2" style="padding-right: 14px;"><div class="tk-time-tracker-cel"><div class="tk-hours">${(fixed.totals[k][month] || 0) / 8} days</div></div></td>`).join('')}
+${Object.keys(entries.totals).map((k) => `<td colspan="2" style="padding-right: 14px;"><div class="tk-time-tracker-cel"><div class="tk-hours">${(entries.totals[k][month] || 0) / 8} days</div></div></td>`).join('')}
 </tr>`;
         }
 
         return memo + row + totals;
     }, '');
+    return dataHtml;
+};
+
+const getHeadingsHtml = function (leaveTypes, projects, fixed) {
+
+    const getProjectHeading = (projectKey) => {
+
+        if (projectKey.startsWith('LeaveType-')) {
+            const leaveId = +projectKey.substr(10);
+            const leave = leaveTypes.find((p) => p.id === leaveId);
+
+            if (leave) {
+                return leave.name;
+            }
+        }
+
+        if (projectKey.startsWith('Project-')) {
+            const projectId = +projectKey.substr(8);
+            const project = projects.find((p) => p.id === projectId);
+
+            if (project) {
+                return project.name;
+            }
+        }
+
+        return projectKey;
+    };
+
+    const headingsHtml = `<tr>
+<th>Date</th>
+${Object.keys(fixed.totals).map((k) => `<th colspan="2" style="padding-right: 14px;">${getProjectHeading(k)}</th>`).join('')}
+</tr>`;
+    return headingsHtml;
+};
+
+const report = ({ timeEntries, projects, leaveTypes }) => {
+
+    const fixed = transformTimeEntries(timeEntries);
+
+    // console.table(fixed.data);
+    // console.table(fixed.totals);
+
+    const headingsHtml = getHeadingsHtml(leaveTypes, projects, fixed);
+
+    const dataHtml = getDataHtml(projects, fixed);
 
     const html = Templates.table({
       headingsHtml,
