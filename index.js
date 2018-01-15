@@ -268,7 +268,9 @@ function encode_char(c) {
     ;  if (dayData.display) { 
     ; __append("\n        <tr class=\"tk-time-tracker-row\" style=\"")
     ; __append(escapeFn( Templates.rowStyle(dayData) ))
-    ; __append("\">\n\n            <td style=\"white-space: nowrap;padding-right: 14px;\">")
+    ; __append("\">\n\n            <td style=\"white-space: nowrap;padding-right: 14px;\" title=\"")
+    ; __append(escapeFn( dayData.rows.map((row) => JSON.stringify(row)).join('\n\n') ))
+    ; __append("\">")
     ; __append(escapeFn( dateKey ))
     ; __append("</td>\n\n            ")
     ;  Object.keys(timeEntries.totals).forEach((projectKey) => { const projectData = dayData.projects[projectKey]; 
