@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "eslint .",
-    "build": "echo ok"
+    "build": "browserify . -o dist/index.js",
+    "pre-commit": "npm run build && npm run test && git add -A dist/index.js"
   },
   "repository": {
     "type": "git",
@@ -27,6 +28,6 @@
     "git-pre-hooks": "1.x.x"
   },
   "git-pre-hooks": {
-    "pre-commit": "npm run build && npm run test"
+    "pre-commit": "npm run pre-commit"
   }
 }
