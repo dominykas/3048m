@@ -20,7 +20,7 @@
   "devDependencies": {
     "browserify": "15.x.x",
     "ejs": "2.x.x",
-    "ejsify": "1.x.x",
+    "ejsify": "git://github.com/insidewarehouse/ejsify#ejs@2.x",
     "eslint": "4.x.x",
     "eslint-config-hapi": "11.x.x",
     "eslint-plugin-hapi": "4.x.x",
