@@ -36,22 +36,27 @@ function encode_char(c) {
 
 })
 },{}],3:[function(require,module,exports){
-/* global document, fetch, alert */
 'use strict';
 
-const Templates = require('./templates');
 
 // avoid relying on npm :trollface:
 const leftPad = (str, n) => '0'.repeat(n - ('' + str).length) + str;
 
-const isoDate = (date) => `${date.getFullYear()}-${leftPad(date.getMonth() + 1, 2)}-${leftPad(date.getDate(), 2)}`;
+module.export.isoDate = (date) => `${date.getFullYear()}-${leftPad(date.getMonth() + 1, 2)}-${leftPad(date.getDate(), 2)}`;
+
+},{}],4:[function(require,module,exports){
+/* global document, fetch, alert */
+'use strict';
+
+const Templates = require('./templates');
+const Utils = require('./utils');
 
 const now = new Date();
 
 const queryFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1); // from start of previous month
 const queryTo = new Date(now.getFullYear(), now.getMonth() + 2, 0); // till end of next month
 
-const today = isoDate(new Date());
+const today = Utils.isoDate(new Date());
 const currentMonth = new Date().getMonth();
 const displayFrom = new Date(Date.now() - 86400 * 31 * 1000);
 const displayTo = new Date(Date.now() + 86400 * 7 * 1000);
@@ -60,7 +65,7 @@ const load = () => {
 
     const userId = window.whoami.id;
 
-    const timeEntriesUrl = `https://app.10000ft.com/api/v1/users/${userId}/time_entries?fields=approvals&from=${isoDate(queryFrom)}&page=1&per_page=1000&to=${isoDate(queryTo)}&with_suggestions=true`;
+    const timeEntriesUrl = `https://app.10000ft.com/api/v1/users/${userId}/time_entries?fields=approvals&from=${Utils.isoDate(queryFrom)}&page=1&per_page=1000&to=${Utils.isoDate(queryTo)}&with_suggestions=true`;
     const timeEntriesPromise = fetch(timeEntriesUrl, { credentials: 'include' }).then((res) => res.json());
 
     const projectsUrl = `https://app.10000ft.com/api/v1/users/${userId}/projects?with_archived=true&per_page=100&with_phases=true`;
@@ -141,7 +146,7 @@ const report = ({ timeEntries, projects, leaveTypes }) => {
     let date;
     do {
         date = new Date(queryFrom.getFullYear(), queryFrom.getMonth(), day);
-        const dateKey = isoDate(date);
+        const dateKey = Utils.isoDate(date);
         initialValue.data[dateKey] = {
             weekday: date.getDay(),
             date,
@@ -284,4 +289,4 @@ if (!window.whoami) {
 
 load();
 
-},{"./templates":1}]},{},[3]);
+},{"./templates":1,"./utils":3}]},{},[4]);
