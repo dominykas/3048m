@@ -36,7 +36,9 @@ const getInitialValue = function ({ queryFrom, queryTo, displayFrom, displayTo }
             display: inDisplayRange || currentMonth,
             lastOfMonth: date.getMonth() !== nextDayAfterDate.getMonth(),
 
+            totalHours: 0,
             projects: {},
+            rowsByProjects: {},
             rows: []
 
         };
@@ -49,54 +51,72 @@ const getInitialValue = function ({ queryFrom, queryTo, displayFrom, displayTo }
 
 const transformTimeEntries = function (query, timeEntries) {
 
-    return timeEntries.reduce((memo, row) => {
+    const result = getInitialValue(query);
 
-        const data = memo.data;
-        const totals = memo.totals;
+    timeEntries.forEach((entry) => {
 
-        data[row.date].rows.push(row);
+        const dayData = result.data[entry.date];
 
-        if (row.hours === 0 && row.notes === null) {
-            // @todo: render these into a data-attribute?
-            return memo;
+        dayData.rows.push(entry);
+
+        if (entry.hours === 0 && entry.notes === null) {
+            return;
         }
 
-        const id = `${row.assignable_type}-${row.assignable_id}`;
+        const id = `${entry.assignable_type}-${entry.assignable_id}`;
 
-        if (!totals[id]) {
-            totals[id] = {};
+        dayData.rowsByProjects[id] = dayData.rowsByProjects[id] || [];
+        dayData.rowsByProjects[id].push(entry);
+
+        if (!result.totals[id]) {
+            result.totals[id] = {};
         }
 
-        const [y, m] = row.date.split('-');
-
-        if (!totals[id][`${y}-${m}`]) {
-            totals[id][`${y}-${m}`] = 0;
+        if (!result.totals[id][dayData.month]) {
+            result.totals[id][dayData.month] = 0;
         }
+    });
 
-        const projectData = data[row.date].projects;
+    Utils.forEach(result.data, (dayData, dateKey) => {
 
-        if (row.is_suggestion && !projectData[id]) {
-            projectData[id] = { scheduled: row.scheduled_hours };
-        }
-        else {
-            if (projectData[id] && projectData[id].hours > 0 && row.hours > 0) {
-                projectData[id].error = true;
+        const { projects, rowsByProjects } = dayData;
+
+        Utils.forEach(rowsByProjects, (rows, projectKey) => {
+
+            const projectData = {};
+
+            const scheduleEntries = rows.filter((entry) => entry.is_suggestion);
+
+            if (scheduleEntries.length > 1) {
+                projectData.error = 'E_MULTIPLE_SCHEDULES';
             }
-            else {
-                projectData[id] = {};
+
+            if (scheduleEntries.length > 0) {
+                projectData.scheduled = scheduleEntries[0].scheduled_hours;
             }
 
-            if (row.hours > 0) {
-                projectData[id].hours = (projectData[id].hours || 0) + row.hours;
-                totals[id][`${y}-${m}`] += row.hours;
-            }
-            if (row.notes !== null) {
-                projectData[id].notes = row.notes;
-            }
-        }
+            const hoursEntries = rows.filter((entry) => entry.hours > 0);
 
-        return memo;
-    }, getInitialValue(query));
+            if (hoursEntries.length > 1) {
+                projectData.error = 'E_MULTIPLE_ENTRIES';
+            }
+
+            if (hoursEntries.length > 0) {
+
+                projectData.hours = hoursEntries.reduce((sum, { hours }) => sum + hours, 0);
+                result.totals[projectKey][dayData.month] += projectData.hours;
+                dayData.totalHours += projectData.hours;
+
+                if (hoursEntries[0].notes !== null) {
+                    projectData.notes = hoursEntries[0].notes;
+                }
+            }
+
+            projects[projectKey] = projectData;
+        });
+    });
+
+    return result;
 };
 
 module.exports.load = function (userId, displayFrom, displayTo) {
@@ -281,8 +301,12 @@ function encode_char(c) {
     ; __append("\n            </div></td>\n            <td style=\"padding-right: 14px;\">\n                ")
     ; __append( projectData && projectData.notes || '' )
     ; __append("\n                ")
-    ;  if (projectData && projectData.error) { 
+    ;  if (projectData && projectData.error === 'E_MULTIPLE_ENTRIES') { 
     ; __append("\n                <span style=\"color: #999;font-size: 10px;\">Fix multiple entries in \"Day\" view</span>\n                ")
+    ;  } 
+    ; __append("\n                ")
+    ;  if (projectData && projectData.error === 'E_MULTIPLE_SCHEDULES') { 
+    ; __append("\n                <span style=\"color: #900;font-size: 10px;\">Multiple schedules available</span>\n                ")
     ;  } 
     ; __append("\n            </td>\n            ")
     ;  }) 
