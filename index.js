@@ -5,6 +5,80 @@
 
 const Utils = require('./utils');
 
+const getInitialValue = function (queryFrom, queryTo) {
+
+    const initialValue = {
+        data: {},
+        totals: {}
+    };
+
+    let day = queryFrom.getDate();
+    let date;
+    do {
+        date = new Date(queryFrom.getFullYear(), queryFrom.getMonth(), day);
+        const dateKey = Utils.isoDate(date);
+        initialValue.data[dateKey] = {
+            weekday: date.getDay(),
+            date,
+            lastOfMonth: new Date(queryFrom.getFullYear(), queryFrom.getMonth(), day + 1).getMonth() !== date.getMonth(),
+            rows: []
+        };
+        day++;
+    } while (date < queryTo);
+
+    return initialValue;
+};
+
+const transformTimeEntries = function (queryFrom, queryTo, timeEntries) {
+
+    return timeEntries.reduce((memo, row) => {
+
+        const data = memo.data;
+        const totals = memo.totals;
+
+        data[row.date].rows.push(row);
+
+        if (row.hours === 0 && row.notes === null) {
+            // @todo: render these into a data-attribute?
+            return memo;
+        }
+
+        const id = `${row.assignable_type}-${row.assignable_id}`;
+
+        if (!totals[id]) {
+            totals[id] = {};
+        }
+
+        const [y, m] = row.date.split('-');
+
+        if (!totals[id][`${y}-${m}`]) {
+            totals[id][`${y}-${m}`] = 0;
+        }
+
+        if (row.is_suggestion && !data[row.date][`${id}-hours`]) {
+            data[row.date][id] = { scheduled: row.scheduled_hours };
+        }
+        else {
+            if (data[row.date][id] && data[row.date][id].hours > 0 && row.hours > 0) {
+                data[row.date][id].error = true;
+            }
+            else {
+                data[row.date][id] = {};
+            }
+
+            if (row.hours > 0) {
+                data[row.date][id].hours = (data[row.date][id].hours || 0) + row.hours;
+                totals[id][`${y}-${m}`] += row.hours;
+            }
+            if (row.notes !== null) {
+                data[row.date][id].notes = row.notes;
+            }
+        }
+
+        return memo;
+    }, getInitialValue(queryFrom, queryTo));
+};
+
 module.exports.load = function (userId, queryFrom, queryTo) {
 
     const timeEntriesUrl = `https://app.10000ft.com/api/v1/users/${userId}/time_entries?fields=approvals&from=${Utils.isoDate(queryFrom)}&page=1&per_page=1000&to=${Utils.isoDate(queryTo)}&with_suggestions=true`;
@@ -21,7 +95,15 @@ module.exports.load = function (userId, queryFrom, queryTo) {
         existing.style.opacity = '0.3';
     }
 
-    return Promise.all([timeEntriesPromise, projectsPromise, leaveTypesPromise]);
+    return Promise.all([timeEntriesPromise, projectsPromise, leaveTypesPromise])
+        .then(([timeEntriesRes, projectsRes, laveTypesRes]) => {
+
+            return {
+                timeEntries: transformTimeEntries(queryFrom, queryTo, timeEntriesRes.data),
+                projects: projectsRes.data,
+                leaveTypes: laveTypesRes.data
+            };
+        });
 };
 
 },{"./utils":4}],2:[function(require,module,exports){
@@ -133,82 +215,6 @@ const now = new Date();
 const queryFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1); // from start of previous month
 const queryTo = new Date(now.getFullYear(), now.getMonth() + 2, 0); // till end of next month
 
-const getInitialValue = function () {
-
-    const initialValue = {
-        data: {},
-        totals: {}
-    };
-
-    let day = queryFrom.getDate();
-    let date;
-    do {
-        date = new Date(queryFrom.getFullYear(), queryFrom.getMonth(), day);
-        const dateKey = Utils.isoDate(date);
-        initialValue.data[dateKey] = {
-            weekday: date.getDay(),
-            date,
-            lastOfMonth: new Date(queryFrom.getFullYear(), queryFrom.getMonth(), day + 1).getMonth() !== date.getMonth(),
-            rows: []
-        };
-        day++;
-    } while (date < queryTo);
-    return initialValue;
-};
-
-const transformTimeEntries = function (timeEntries) {
-
-    const initialValue = getInitialValue();
-
-    const fixed = timeEntries.reduce((memo, row) => {
-
-        const data = memo.data;
-        const totals = memo.totals;
-
-        data[row.date].rows.push(row);
-
-        if (row.hours === 0 && row.notes === null) {
-            // @todo: render these into a data-attribute?
-            return memo;
-        }
-
-        const id = `${row.assignable_type}-${row.assignable_id}`;
-
-        if (!totals[id]) {
-            totals[id] = {};
-        }
-
-        const [y, m] = row.date.split('-');
-
-        if (!totals[id][`${y}-${m}`]) {
-            totals[id][`${y}-${m}`] = 0;
-        }
-
-        if (row.is_suggestion && !data[row.date][`${id}-hours`]) {
-            data[row.date][id] = { scheduled: row.scheduled_hours };
-        }
-        else {
-            if (data[row.date][id] && data[row.date][id].hours > 0 && row.hours > 0) {
-                data[row.date][id].error = true;
-            }
-            else {
-                data[row.date][id] = {};
-            }
-
-            if (row.hours > 0) {
-                data[row.date][id].hours = (data[row.date][id].hours || 0) + row.hours;
-                totals[id][`${y}-${m}`] += row.hours;
-            }
-            if (row.notes !== null) {
-                data[row.date][id].notes = row.notes;
-            }
-        }
-
-        return memo;
-    }, initialValue);
-    return fixed;
-};
-
 const getDataHtml = function (projects, leaveTypes, entries) {
 
     const today = Utils.isoDate(new Date());
@@ -276,38 +282,29 @@ ${Object.keys(entries.totals).map((k) => `<td colspan="2" style="padding-right: 
     return dataHtml;
 };
 
-const report = ({ timeEntries, projects, leaveTypes }) => {
-
-    const dataHtml = getDataHtml(projects, leaveTypes, timeEntries);
-
-    const html = Templates.table({
-        timeEntries,
-        projects,
-        leaveTypes,
-        dataHtml
-    });
-
-    const existing = document.getElementById('results-3048m');
-    if (existing) {
-        existing.parentNode.removeChild(existing);
-    }
-
-    document.querySelector('#personPageMainContentAreaTimeTracker').insertAdjacentHTML('beforebegin', html);
-};
-
 if (!window.whoami) {
     window.alert('Are you on 10kft? And logged in?');
     return;
 }
 
 Data.load(window.whoami.id, queryFrom, queryTo)
-    .then(([timeEntriesRes, projectsRes, laveTypesRes]) => {
+    .then(({ timeEntries, projects, leaveTypes }) => {
 
-        report({
-            timeEntries: transformTimeEntries(timeEntriesRes.data),
-            projects: projectsRes.data,
-            leaveTypes: laveTypesRes.data
+        const dataHtml = getDataHtml(projects, leaveTypes, timeEntries);
+
+        const html = Templates.table({
+            timeEntries,
+            projects,
+            leaveTypes,
+            dataHtml
         });
+
+        const existing = document.getElementById('results-3048m');
+        if (existing) {
+            existing.parentNode.removeChild(existing);
+        }
+
+        document.querySelector('#personPageMainContentAreaTimeTracker').insertAdjacentHTML('beforebegin', html);
     });
 
 },{"./data":1,"./templates":2,"./utils":4}]},{},[5]);
