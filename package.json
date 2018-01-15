@@ -4,7 +4,8 @@
   "description": "Visit [https://dominykas.github.io/3048m/](https://dominykas.github.io/3048m/) and drag <a href=\"javascript:(() => { const s = document.createElement('script'); s.src = 'https://rawgit.com/dominykas/3048m/master/index.js'; document.head.appendChild(s); })();\">`3048m`</a> to your bookmarks bar.",
   "main": "index.js",
   "scripts": {
-    "test": "eslint ."
+    "test": "eslint .",
+    "build": "echo ok"
   },
   "repository": {
     "type": "git",
@@ -22,6 +23,10 @@
     "ejsify": "1.x.x",
     "eslint": "4.x.x",
     "eslint-config-hapi": "11.x.x",
-    "eslint-plugin-hapi": "4.x.x"
+    "eslint-plugin-hapi": "4.x.x",
+    "git-pre-hooks": "1.x.x"
+  },
+  "git-pre-hooks": {
+    "pre-commit": "npm run build && npm run test"
   }
 }
