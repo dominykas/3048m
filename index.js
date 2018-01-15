@@ -1,9 +1,35 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+/* global document, fetch  */
+
+'use strict';
+
+const Utils = require('./utils');
+
+module.exports.load = function (userId, queryFrom, queryTo) {
+
+    const timeEntriesUrl = `https://app.10000ft.com/api/v1/users/${userId}/time_entries?fields=approvals&from=${Utils.isoDate(queryFrom)}&page=1&per_page=1000&to=${Utils.isoDate(queryTo)}&with_suggestions=true`;
+    const timeEntriesPromise = fetch(timeEntriesUrl, { credentials: 'include' }).then((res) => res.json());
+
+    const projectsUrl = `https://app.10000ft.com/api/v1/users/${userId}/projects?with_archived=true&per_page=100&with_phases=true`;
+    const projectsPromise = fetch(projectsUrl, { credentials: 'include' }).then((res) => res.json());
+
+    const leaveTypesUrl = `https://app.10000ft.com/api/v1/leave_types?page=1&with_archived=true`;
+    const leaveTypesPromise = fetch(leaveTypesUrl, { credentials: 'include' }).then((res) => res.json());
+
+    const existing = document.getElementById('results-3048m');
+    if (existing) {
+        existing.style.opacity = '0.3';
+    }
+
+    return Promise.all([timeEntriesPromise, projectsPromise, leaveTypesPromise]);
+};
+
+},{"./utils":4}],2:[function(require,module,exports){
 'use strict';
 
 module.exports.table = require('./table.ejs');
 
-},{"./table.ejs":2}],2:[function(require,module,exports){
+},{"./table.ejs":3}],3:[function(require,module,exports){
 module.exports = (function anonymous(locals, escapeFn, include, rethrow
 /*``*/) {
 escapeFn = escapeFn || function (markup) {
@@ -35,7 +61,7 @@ function encode_char(c) {
   return __output.join("");
 
 })
-},{}],3:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 'use strict';
 
 
@@ -44,10 +70,11 @@ const leftPad = (str, n) => '0'.repeat(n - ('' + str).length) + str;
 
 module.exports.isoDate = (date) => `${date.getFullYear()}-${leftPad(date.getMonth() + 1, 2)}-${leftPad(date.getDate(), 2)}`;
 
-},{}],4:[function(require,module,exports){
-/* global document, fetch, alert */
+},{}],5:[function(require,module,exports){
+/* global document, fetch */
 'use strict';
 
+const Data = require('./data');
 const Templates = require('./templates');
 const Utils = require('./utils');
 
@@ -55,35 +82,6 @@ const now = new Date();
 
 const queryFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1); // from start of previous month
 const queryTo = new Date(now.getFullYear(), now.getMonth() + 2, 0); // till end of next month
-
-const load = () => {
-
-    const userId = window.whoami.id;
-
-    const timeEntriesUrl = `https://app.10000ft.com/api/v1/users/${userId}/time_entries?fields=approvals&from=${Utils.isoDate(queryFrom)}&page=1&per_page=1000&to=${Utils.isoDate(queryTo)}&with_suggestions=true`;
-    const timeEntriesPromise = fetch(timeEntriesUrl, { credentials: 'include' }).then((res) => res.json());
-
-    const projectsUrl = `https://app.10000ft.com/api/v1/users/${userId}/projects?with_archived=true&per_page=100&with_phases=true`;
-    const projectsPromise = fetch(projectsUrl, { credentials: 'include' }).then((res) => res.json());
-
-    const leaveTypesUrl = `https://app.10000ft.com/api/v1/leave_types?page=1&with_archived=true`;
-    const leaveTypesPromise = fetch(leaveTypesUrl, { credentials: 'include' }).then((res) => res.json());
-
-    const existing = document.getElementById('results-3048m');
-    if (existing) {
-        existing.style.opacity = '0.3';
-    }
-
-    Promise.all([timeEntriesPromise, projectsPromise, leaveTypesPromise])
-        .then(([timeEntriesRes, projectsRes, laveTypesRes]) => {
-
-            report({
-                timeEntries: timeEntriesRes.data,
-                projects: projectsRes.data,
-                leaveTypes: laveTypesRes.data
-            });
-        });
-};
 
 const getInitialValue = function () {
 
@@ -307,10 +305,18 @@ const report = ({ timeEntries, projects, leaveTypes }) => {
 };
 
 if (!window.whoami) {
-    alert('Are you on 10kft? And logged in?');
+    window.alert('Are you on 10kft? And logged in?');
     return;
 }
 
-load();
+Data.load(window.whoami.id, queryFrom, queryTo)
+    .then(([timeEntriesRes, projectsRes, laveTypesRes]) => {
 
-},{"./templates":1,"./utils":3}]},{},[4]);
+        report({
+            timeEntries: timeEntriesRes.data,
+            projects: projectsRes.data,
+            leaveTypes: laveTypesRes.data
+        });
+    });
+
+},{"./data":1,"./templates":2,"./utils":4}]},{},[5]);
