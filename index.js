@@ -32,6 +32,7 @@ const getInitialValue = function ({ queryFrom, queryTo, displayFrom, displayTo }
             date,
             display: inDisplayRange || currentMonth,
             lastOfMonth: date.getMonth() !== nextDayAfterDate.getMonth(),
+            projects: {},
             rows: []
         };
         day++;
@@ -66,23 +67,25 @@ const transformTimeEntries = function (query, timeEntries) {
             totals[id][`${y}-${m}`] = 0;
         }
 
-        if (row.is_suggestion && !data[row.date][`${id}-hours`]) {
-            data[row.date][id] = { scheduled: row.scheduled_hours };
+        const projectData = data[row.date].projects;
+
+        if (row.is_suggestion && !projectData[id]) {
+            projectData[id] = { scheduled: row.scheduled_hours };
         }
         else {
-            if (data[row.date][id] && data[row.date][id].hours > 0 && row.hours > 0) {
-                data[row.date][id].error = true;
+            if (projectData[id] && projectData[id].hours > 0 && row.hours > 0) {
+                projectData[id].error = true;
             }
             else {
-                data[row.date][id] = {};
+                projectData[id] = {};
             }
 
             if (row.hours > 0) {
-                data[row.date][id].hours = (data[row.date][id].hours || 0) + row.hours;
+                projectData[id].hours = (projectData[id].hours || 0) + row.hours;
                 totals[id][`${y}-${m}`] += row.hours;
             }
             if (row.notes !== null) {
-                data[row.date][id].notes = row.notes;
+                projectData[id].notes = row.notes;
             }
         }
 
@@ -216,6 +219,21 @@ exports.getColorClass = (projects, leaveTypes, projectKey, hasError) => {
     return 'grad-blue';
 };
 
+exports.getRowStyle = ({ weekday, today }) => {
+
+    let rowStyle = '';
+
+    if (weekday === 0 || weekday === 6) {
+        rowStyle += 'background-color: #f5f5f5;';
+    }
+
+    if (today) {
+        rowStyle += 'outline: 1px dotted #000;';
+    }
+
+    return rowStyle;
+};
+
 },{}],5:[function(require,module,exports){
 /* global document, fetch */
 'use strict';
@@ -229,7 +247,8 @@ const getDataHtml = function (projects, leaveTypes, entries) {
     const dataHtml = Object.keys(entries.data).reduce((memo, dateKey) => {
 
         const rowData = entries.data[dateKey];
-        const rowHours = Object.keys(rowData).reduce((sum, k) => sum + (rowData[k] && rowData[k].hours || 0), 0);
+        const rowProjectData = rowData.projects;
+        const rowHours = Object.keys(rowProjectData).reduce((sum, k) => sum + (rowProjectData[k] && rowProjectData[k].hours || 0), 0);
 
         let row = '';
 
@@ -241,33 +260,25 @@ const getDataHtml = function (projects, leaveTypes, entries) {
                     let notes = '';
                     let hoursClass = '';
 
-                    if (rowData[k] && rowData[k].scheduled && rowHours <= 0) {
-                        hours = rowData[k].scheduled;
+                    if (rowProjectData[k] && rowProjectData[k].scheduled && rowHours <= 0) {
+                        hours = rowProjectData[k].scheduled;
                     }
-                    if (rowData[k] && rowData[k].hours) {
-                        hours = rowData[k].hours;
-                        hoursClass = 'has-gradient confirmed ' + Utils.getColorClass(projects, leaveTypes, k, rowData[k].error);
+                    if (rowProjectData[k] && rowProjectData[k].hours) {
+                        hours = rowProjectData[k].hours;
+                        hoursClass = 'has-gradient confirmed ' + Utils.getColorClass(projects, leaveTypes, k, rowProjectData[k].error);
                     }
-                    if (rowData[k] && rowData[k].notes) {
-                        notes = rowData[k].notes;
+                    if (rowProjectData[k] && rowProjectData[k].notes) {
+                        notes = rowProjectData[k].notes;
                     }
 
-                    if (rowData[k] && rowData[k].error) {
+                    if (rowProjectData[k] && rowProjectData[k].error) {
                         notes += ' <span style="color: #999;font-size: 10px;">Fix multiple entries in "Day" view</span>';
                     }
 
                     return `<td class="tk-time-tracker-cel ${hoursClass}"><div class="tk-hours">${hours}</div></td><td style="padding-right: 14px;">${notes}</td>`;
                 }).join('');
 
-            let rowStyle = '';
-            if (rowData.weekday === 0 || rowData.weekday === 6) {
-                rowStyle += 'background-color: #f5f5f5;';
-            }
-            if (rowData.today) {
-                rowStyle += 'outline: 1px dotted #000;';
-            }
-
-            row = `<tr class="tk-time-tracker-row" style="${rowStyle}"><td style="white-space: nowrap;padding-right: 14px;">${dateKey}</td>${columns}</tr>`;
+            row = `<tr class="tk-time-tracker-row" style="${Utils.getRowStyle(rowData)}"><td style="white-space: nowrap;padding-right: 14px;">${dateKey}</td>${columns}</tr>`;
         }
 
         let totals = '';
