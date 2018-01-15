@@ -124,12 +124,111 @@ module.exports.load = function (userId, displayFrom, displayTo) {
         });
 };
 
-},{"./utils":5}],2:[function(require,module,exports){
+},{"./utils":9}],2:[function(require,module,exports){
 'use strict';
 
-module.exports.table = require('./table.ejs');
+const hourCellColor = (projects, leaveTypes, projectKey, hasError) => {
 
-},{"./table.ejs":3}],3:[function(require,module,exports){
+    if (hasError) {
+        return 'grad-red';
+    }
+
+    if (projectKey.startsWith('LeaveType-')) {
+        return 'grad-orange';
+    }
+
+    if (projectKey.startsWith('Project-')) {
+        const projectId = +projectKey.substr(8);
+        const project = projects.find((p) => p.id === projectId);
+
+        if (project && project.project_state === 'Internal') {
+            return 'grad-purple';
+        }
+    }
+
+    return 'grad-blue';
+};
+
+module.exports = (projects, leaveTypes, projectKey, projectData) => {
+
+    if (projectData && projectData.hours) {
+        return 'tk-time-tracker-cel has-gradient confirmed ' + hourCellColor(projects, leaveTypes, projectKey, projectData.error);
+    }
+
+    return 'tk-time-tracker-cel';
+};
+
+},{}],3:[function(require,module,exports){
+'use strict';
+
+exports.table = require('./table.ejs');
+
+exports.projectHeading = require('./projectHeading');
+exports.projectHours = require('./projectHours');
+exports.hourCellClass = require('./hourCellClass');
+exports.rowStyle = require('./rowStyle');
+
+},{"./hourCellClass":2,"./projectHeading":4,"./projectHours":5,"./rowStyle":6,"./table.ejs":7}],4:[function(require,module,exports){
+'use strict';
+
+module.exports = (projects, leaveTypes, projectKey) => {
+
+    if (projectKey.startsWith('LeaveType-')) {
+        const leaveId = +projectKey.substr(10);
+        const leave = leaveTypes.find((p) => p.id === leaveId);
+
+        if (leave) {
+            return leave.name;
+        }
+    }
+
+    if (projectKey.startsWith('Project-')) {
+        const projectId = +projectKey.substr(8);
+        const project = projects.find((p) => p.id === projectId);
+
+        if (project) {
+            return project.name;
+        }
+    }
+
+    return projectKey;
+};
+
+},{}],5:[function(require,module,exports){
+'use strict';
+
+module.exports = (projectData, rowHours) => {
+
+    if (projectData && projectData.hours) {
+        return projectData.hours;
+    }
+
+    if (projectData && projectData.scheduled && rowHours <= 0) {
+        return projectData.scheduled;
+    }
+
+    return '';
+};
+
+},{}],6:[function(require,module,exports){
+'use strict';
+
+module.exports = ({ weekday, today }) => {
+
+    let rowStyle = '';
+
+    if (weekday === 0 || weekday === 6) {
+        rowStyle += 'background-color: #f5f5f5;';
+    }
+
+    if (today) {
+        rowStyle += 'outline: 1px dotted #000;';
+    }
+
+    return rowStyle;
+};
+
+},{}],7:[function(require,module,exports){
 module.exports = (function anonymous(locals, escapeFn, include, rethrow
 /*``*/) {
 escapeFn = escapeFn || function (markup) {
@@ -153,10 +252,11 @@ function encode_char(c) {
   var __output = [], __append = __output.push.bind(__output);
   with (locals || {}) {
     ;  const Utils = require('../utils'); 
-    ; __append("\n<table id=\"results-3048m\" style=\"clear: both;\" class=\"widget-wrapper\">\n\n    <thead>\n        <tr>\n            <th>Date</th>\n            ")
+    ;  const Templates = require('../templates'); 
+    ; __append("\n\n<table id=\"results-3048m\" style=\"clear: both;\" class=\"widget-wrapper\">\n\n    <thead>\n        <tr>\n            <th>Date</th>\n            ")
     ;  Object.keys(timeEntries.totals).forEach((k) => { 
     ; __append("\n            <th colspan=\"2\" style=\"padding-right: 14px;\">")
-    ; __append(escapeFn( Utils.formatProjectHeading(projects, leaveTypes, k) ))
+    ; __append(escapeFn( Templates.projectHeading(projects, leaveTypes, k) ))
     ; __append("</th>\n            ")
     ;  }); 
     ; __append("\n        </tr>\n    </thead>\n\n    <tbody class=\"tk-time-tracker\">\n        ")
@@ -167,15 +267,15 @@ function encode_char(c) {
     ; __append("\n\n        ")
     ;  if (dayData.display) { 
     ; __append("\n        <tr class=\"tk-time-tracker-row\" style=\"")
-    ; __append(escapeFn( Utils.getRowStyle(dayData) ))
+    ; __append(escapeFn( Templates.rowStyle(dayData) ))
     ; __append("\">\n\n            <td style=\"white-space: nowrap;padding-right: 14px;\">")
     ; __append(escapeFn( dateKey ))
     ; __append("</td>\n\n            ")
     ;  Object.keys(timeEntries.totals).forEach((projectKey) => { const projectData = dayData.projects[projectKey]; 
     ; __append("\n            <td class=\"")
-    ; __append( Utils.getHourCellClass(projects, leaveTypes, projectKey, projectData) )
+    ; __append( Templates.hourCellClass(projects, leaveTypes, projectKey, projectData) )
     ; __append("\"><div class=\"tk-hours\">\n                ")
-    ; __append( Utils.getProjectHours(projectData, rowHours) )
+    ; __append( Templates.projectHours(projectData, rowHours) )
     ; __append("\n            </div></td>\n            <td style=\"padding-right: 14px;\">\n                ")
     ; __append( projectData && projectData.notes || '' )
     ; __append("\n                ")
@@ -205,7 +305,7 @@ function encode_char(c) {
   return __output.join("");
 
 })
-},{"../utils":5}],4:[function(require,module,exports){
+},{"../templates":3,"../utils":9}],8:[function(require,module,exports){
 /* global document */
 'use strict';
 
@@ -239,7 +339,7 @@ exports.render = (data) => {
         .insertAdjacentHTML('beforebegin', html);
 };
 
-},{"./templates":2}],5:[function(require,module,exports){
+},{"./templates":3}],9:[function(require,module,exports){
 'use strict';
 
 // avoid relying on npm :trollface:
@@ -256,89 +356,7 @@ exports.forEach = (object, callback) => {
     Object.keys(object).forEach((k) => callback(object[k], k));
 };
 
-exports.formatProjectHeading = (projects, leaveTypes, projectKey) => {
-
-    if (projectKey.startsWith('LeaveType-')) {
-        const leaveId = +projectKey.substr(10);
-        const leave = leaveTypes.find((p) => p.id === leaveId);
-
-        if (leave) {
-            return leave.name;
-        }
-    }
-
-    if (projectKey.startsWith('Project-')) {
-        const projectId = +projectKey.substr(8);
-        const project = projects.find((p) => p.id === projectId);
-
-        if (project) {
-            return project.name;
-        }
-    }
-
-    return projectKey;
-};
-
-exports.getColorClass = (projects, leaveTypes, projectKey, hasError) => {
-
-    if (hasError) {
-        return 'grad-red';
-    }
-
-    if (projectKey.startsWith('LeaveType-')) {
-        return 'grad-orange';
-    }
-
-    if (projectKey.startsWith('Project-')) {
-        const projectId = +projectKey.substr(8);
-        const project = projects.find((p) => p.id === projectId);
-
-        if (project && project.project_state === 'Internal') {
-            return 'grad-purple';
-        }
-    }
-
-    return 'grad-blue';
-};
-
-exports.getProjectHours = function (projectData, rowHours) {
-
-    if (projectData && projectData.hours) {
-        return projectData.hours;
-    }
-
-    if (projectData && projectData.scheduled && rowHours <= 0) {
-        return projectData.scheduled;
-    }
-
-    return '';
-};
-
-exports.getHourCellClass = (projects, leaveTypes, projectKey, projectData) => {
-
-    if (projectData && projectData.hours) {
-        return 'tk-time-tracker-cel has-gradient confirmed ' + exports.getColorClass(projects, leaveTypes, projectKey, projectData.error);
-    }
-
-    return 'tk-time-tracker-cel';
-};
-
-exports.getRowStyle = ({ weekday, today }) => {
-
-    let rowStyle = '';
-
-    if (weekday === 0 || weekday === 6) {
-        rowStyle += 'background-color: #f5f5f5;';
-    }
-
-    if (today) {
-        rowStyle += 'outline: 1px dotted #000;';
-    }
-
-    return rowStyle;
-};
-
-},{}],6:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 'use strict';
 
 const Data = require('./data');
@@ -360,4 +378,4 @@ Data.load(userId, displayFrom, displayTo).then((data) => {
     Ui.render(data);
 });
 
-},{"./data":1,"./ui":4}]},{},[6]);
+},{"./data":1,"./ui":8}]},{},[10]);
