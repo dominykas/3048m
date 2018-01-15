@@ -52,23 +52,73 @@ function encode_char(c) {
 ;
   var __output = [], __append = __output.push.bind(__output);
   with (locals || {}) {
-    ; __append("<table id=\"results-3048m\" style=\"clear: both;\" class=\"widget-wrapper\">\n  <thead>")
-    ; __append( headingsHtml )
-    ; __append("</thead>\n  <tbody class=\"tk-time-tracker\">")
+    ;  const Utils = require('../utils'); 
+    ; __append("\n<table id=\"results-3048m\" style=\"clear: both;\" class=\"widget-wrapper\">\n    <thead>\n        <tr>\n            <th>Date</th>\n            ")
+    ;  Object.keys(timeEntries.totals).forEach((k) => { 
+    ; __append("\n            <th colspan=\"2\" style=\"padding-right: 14px;\">")
+    ; __append(escapeFn( Utils.formatProjectHeading(projects, leaveTypes, k) ))
+    ; __append("</th>\n            ")
+    ;  }); 
+    ; __append("\n        </tr>\n    </thead>\n    <tbody class=\"tk-time-tracker\">")
     ; __append( dataHtml )
     ; __append("</tbody>\n</table>\n")
   }
   return __output.join("");
 
 })
-},{}],4:[function(require,module,exports){
+},{"../utils":4}],4:[function(require,module,exports){
 'use strict';
 
 
 // avoid relying on npm :trollface:
-const leftPad = (str, n) => '0'.repeat(n - ('' + str).length) + str;
+exports.leftPad = (str, n) => '0'.repeat(n - ('' + str).length) + str;
 
-module.exports.isoDate = (date) => `${date.getFullYear()}-${leftPad(date.getMonth() + 1, 2)}-${leftPad(date.getDate(), 2)}`;
+exports.isoDate = (date) => `${date.getFullYear()}-${exports.leftPad(date.getMonth() + 1, 2)}-${exports.leftPad(date.getDate(), 2)}`;
+
+exports.formatProjectHeading = (projects, leaveTypes, projectKey) => {
+
+    if (projectKey.startsWith('LeaveType-')) {
+        const leaveId = +projectKey.substr(10);
+        const leave = leaveTypes.find((p) => p.id === leaveId);
+
+        if (leave) {
+            return leave.name;
+        }
+    }
+
+    if (projectKey.startsWith('Project-')) {
+        const projectId = +projectKey.substr(8);
+        const project = projects.find((p) => p.id === projectId);
+
+        if (project) {
+            return project.name;
+        }
+    }
+
+    return projectKey;
+};
+
+exports.getColorClass = (projects, leaveTypes, projectKey, hasError) => {
+
+    if (hasError) {
+        return 'grad-red';
+    }
+
+    if (projectKey.startsWith('LeaveType-')) {
+        return 'grad-orange';
+    }
+
+    if (projectKey.startsWith('Project-')) {
+        const projectId = +projectKey.substr(8);
+        const project = projects.find((p) => p.id === projectId);
+
+        if (project && project.project_state === 'Internal') {
+            return 'grad-purple';
+        }
+    }
+
+    return 'grad-blue';
+};
 
 },{}],5:[function(require,module,exports){
 /* global document, fetch */
@@ -159,34 +209,12 @@ const transformTimeEntries = function (timeEntries) {
     return fixed;
 };
 
-const getDataHtml = function (projects, entries) {
+const getDataHtml = function (projects, leaveTypes, entries) {
 
     const today = Utils.isoDate(new Date());
     const currentMonth = new Date().getMonth();
     const displayFrom = new Date(Date.now() - 86400 * 31 * 1000);
     const displayTo = new Date(Date.now() + 86400 * 7 * 1000);
-
-    const getHoursColor = function (projectKey, hasError) {
-
-        if (hasError) {
-            return 'grad-red';
-        }
-
-        if (projectKey.startsWith('LeaveType-')) {
-            return 'grad-orange';
-        }
-
-        if (projectKey.startsWith('Project-')) {
-            const projectId = +projectKey.substr(8);
-            const project = projects.find((p) => p.id === projectId);
-
-            if (project && project.project_state === 'Internal') {
-                return 'grad-purple';
-            }
-        }
-
-        return 'grad-blue';
-    };
 
     const dataHtml = Object.keys(entries.data).reduce((memo, dateKey) => {
 
@@ -210,7 +238,7 @@ const getDataHtml = function (projects, entries) {
                     }
                     if (rowData[k] && rowData[k].hours) {
                         hours = rowData[k].hours;
-                        hoursClass = 'has-gradient confirmed ' + getHoursColor(k, rowData[k].error);
+                        hoursClass = 'has-gradient confirmed ' + Utils.getColorClass(projects, leaveTypes, k, rowData[k].error);
                     }
                     if (rowData[k] && rowData[k].notes) {
                         notes = rowData[k].notes;
@@ -248,52 +276,15 @@ ${Object.keys(entries.totals).map((k) => `<td colspan="2" style="padding-right: 
     return dataHtml;
 };
 
-const getHeadingsHtml = function (leaveTypes, projects, fixed) {
-
-    const getProjectHeading = (projectKey) => {
-
-        if (projectKey.startsWith('LeaveType-')) {
-            const leaveId = +projectKey.substr(10);
-            const leave = leaveTypes.find((p) => p.id === leaveId);
-
-            if (leave) {
-                return leave.name;
-            }
-        }
-
-        if (projectKey.startsWith('Project-')) {
-            const projectId = +projectKey.substr(8);
-            const project = projects.find((p) => p.id === projectId);
-
-            if (project) {
-                return project.name;
-            }
-        }
-
-        return projectKey;
-    };
-
-    const headingsHtml = `<tr>
-<th>Date</th>
-${Object.keys(fixed.totals).map((k) => `<th colspan="2" style="padding-right: 14px;">${getProjectHeading(k)}</th>`).join('')}
-</tr>`;
-    return headingsHtml;
-};
-
 const report = ({ timeEntries, projects, leaveTypes }) => {
 
-    const fixed = transformTimeEntries(timeEntries);
-
-    // console.table(fixed.data);
-    // console.table(fixed.totals);
-
-    const headingsHtml = getHeadingsHtml(leaveTypes, projects, fixed);
-
-    const dataHtml = getDataHtml(projects, fixed);
+    const dataHtml = getDataHtml(projects, leaveTypes, timeEntries);
 
     const html = Templates.table({
-      headingsHtml,
-      dataHtml
+        timeEntries,
+        projects,
+        leaveTypes,
+        dataHtml
     });
 
     const existing = document.getElementById('results-3048m');
@@ -313,7 +304,7 @@ Data.load(window.whoami.id, queryFrom, queryTo)
     .then(([timeEntriesRes, projectsRes, laveTypesRes]) => {
 
         report({
-            timeEntries: timeEntriesRes.data,
+            timeEntries: transformTimeEntries(timeEntriesRes.data),
             projects: projectsRes.data,
             leaveTypes: laveTypesRes.data
         });
