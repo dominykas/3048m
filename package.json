@@ -1,0 +1,19 @@
+{
+  "name": "3048m",
+  "version": "0.0.0",
+  "description": "Visit [https://dominykas.github.io/3048m/](https://dominykas.github.io/3048m/) and drag <a href=\"javascript:(() => { const s = document.createElement('script'); s.src = 'https://rawgit.com/dominykas/3048m/master/index.js'; document.head.appendChild(s); })();\">`3048m`</a> to your bookmarks bar.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dominykas/3048m.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/dominykas/3048m/issues"
+  },
+  "homepage": "https://github.com/dominykas/3048m#readme"
+}
