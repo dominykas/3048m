@@ -144,7 +144,35 @@ module.exports.load = function (userId, displayFrom, displayTo) {
         });
 };
 
-},{"./utils":9}],2:[function(require,module,exports){
+},{"./utils":10}],2:[function(require,module,exports){
+'use strict';
+
+module.exports = (rows) => {
+
+    const approvals = {};
+    rows.forEach((row) => {
+
+        if (!row.approvals || !row.approvals.data) {
+            return;
+        }
+
+        row.approvals.data.forEach((approval) => {
+
+            const k = approval.status;
+            approvals[k] = approvals[k] || 0;
+            ++approvals[k];
+        });
+    });
+
+    if (approvals.approved) {
+        return '<div class="tk-icon-lock"></div>';
+    }
+    else if (approvals.pending) {
+        return '<div class="tk-icon-check-small"></div>';
+    }
+};
+
+},{}],3:[function(require,module,exports){
 'use strict';
 
 const hourCellColor = (projects, leaveTypes, projectKey, hasError) => {
@@ -178,17 +206,18 @@ module.exports = (projects, leaveTypes, projectKey, projectData) => {
     return 'tk-time-tracker-cel';
 };
 
-},{}],3:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 'use strict';
 
 exports.table = require('./table.ejs');
 
+exports.approvals = require('./approvals');
 exports.projectHeading = require('./projectHeading');
 exports.projectHours = require('./projectHours');
 exports.hourCellClass = require('./hourCellClass');
 exports.rowStyle = require('./rowStyle');
 
-},{"./hourCellClass":2,"./projectHeading":4,"./projectHours":5,"./rowStyle":6,"./table.ejs":7}],4:[function(require,module,exports){
+},{"./approvals":2,"./hourCellClass":3,"./projectHeading":5,"./projectHours":6,"./rowStyle":7,"./table.ejs":8}],5:[function(require,module,exports){
 'use strict';
 
 module.exports = (projects, leaveTypes, projectKey) => {
@@ -214,7 +243,7 @@ module.exports = (projects, leaveTypes, projectKey) => {
     return projectKey;
 };
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 'use strict';
 
 module.exports = (projectData, rowHours) => {
@@ -230,7 +259,7 @@ module.exports = (projectData, rowHours) => {
     return '';
 };
 
-},{}],6:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 'use strict';
 
 module.exports = ({ weekday, today }) => {
@@ -248,7 +277,7 @@ module.exports = ({ weekday, today }) => {
     return rowStyle;
 };
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 module.exports = (function anonymous(locals, escapeFn, include, rethrow
 /*``*/) {
 escapeFn = escapeFn || function (markup) {
@@ -296,7 +325,9 @@ function encode_char(c) {
     ;  Object.keys(timeEntries.totals).forEach((projectKey) => { const projectData = dayData.projects[projectKey]; 
     ; __append("\n            <td class=\"")
     ; __append( Templates.hourCellClass(projects, leaveTypes, projectKey, projectData) )
-    ; __append("\"><div class=\"tk-hours\">\n                ")
+    ; __append("\">")
+    ; __append( Templates.approvals(dayData.rows) )
+    ; __append("<div class=\"tk-hours\">\n                ")
     ; __append( Templates.projectHours(projectData, rowHours) )
     ; __append("\n            </div></td>\n            <td style=\"padding-right: 14px;\">\n                ")
     ; __append( projectData && projectData.notes || '' )
@@ -331,7 +362,7 @@ function encode_char(c) {
   return __output.join("");
 
 })
-},{"../templates":3,"../utils":9}],8:[function(require,module,exports){
+},{"../templates":4,"../utils":10}],9:[function(require,module,exports){
 /* global document */
 'use strict';
 
@@ -365,7 +396,7 @@ exports.render = (data) => {
         .insertAdjacentHTML('beforebegin', html);
 };
 
-},{"./templates":3}],9:[function(require,module,exports){
+},{"./templates":4}],10:[function(require,module,exports){
 'use strict';
 
 // avoid relying on npm :trollface:
@@ -382,7 +413,7 @@ exports.forEach = (object, callback) => {
     Object.keys(object).forEach((k) => callback(object[k], k));
 };
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 'use strict';
 
 const Data = require('./data');
@@ -404,4 +435,4 @@ Data.load(userId, displayFrom, displayTo).then((data) => {
     Ui.render(data);
 });
 
-},{"./data":1,"./ui":8}]},{},[10]);
+},{"./data":1,"./ui":9}]},{},[11]);
