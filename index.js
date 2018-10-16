@@ -302,7 +302,7 @@ function encode_char(c) {
   with (locals || {}) {
     ;  const Utils = require('../utils'); 
     ;  const Templates = require('../templates'); 
-    ; __append("\n\n<table id=\"results-3048m\" style=\"clear: both;\" class=\"widget-wrapper\">\n\n    <thead>\n        <tr>\n            <th>Date</th>\n            ")
+    ; __append("\n\n<table id=\"results-3048m\" style=\"clear: both;width:100%;\" class=\"widget-wrapper\">\n\n    <thead>\n        <tr>\n            <th>Date</th>\n            ")
     ;  Object.keys(timeEntries.totals).forEach((k) => { 
     ; __append("\n            <th colspan=\"2\" style=\"padding-right: 14px;\">")
     ; __append(escapeFn( Templates.projectHeading(projects, leaveTypes, k) ))
@@ -392,7 +392,7 @@ exports.render = (data) => {
 
     const html = Templates.table(data);
 
-    document.querySelector('#personPageMainContentAreaTimeTracker')
+    document.querySelector('.tk-approvables-tracker')
         .insertAdjacentHTML('beforebegin', html);
 };
 
