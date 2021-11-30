@@ -124,13 +124,14 @@ module.exports.load = function (userId, displayFrom, displayTo) {
     const queryFrom = new Date(displayFrom.getFullYear(), displayFrom.getMonth(), 1); // from start of displayable month
     const queryTo = new Date(displayTo.getFullYear(), displayTo.getMonth() + 2, 0); // till end of month after displayable month
 
-    const timeEntriesUrl = `https://app.10000ft.com/api/v1/users/${userId}/time_entries?fields=approvals&from=${Utils.isoDate(queryFrom)}&page=1&per_page=1000&to=${Utils.isoDate(queryTo)}&with_suggestions=true`;
+    const apiUrl = 'https://rm.smartsheet.com/api/v1';
+    const timeEntriesUrl = `${apiUrl}/users/${userId}/time_entries?fields=approvals&from=${Utils.isoDate(queryFrom)}&page=1&per_page=1000&to=${Utils.isoDate(queryTo)}&with_suggestions=true`;
     const timeEntriesPromise = fetch(timeEntriesUrl, { credentials: 'include' }).then((res) => res.json());
 
-    const projectsUrl = `https://app.10000ft.com/api/v1/users/${userId}/projects?with_archived=true&per_page=100&with_phases=true`;
+    const projectsUrl = `${apiUrl}/users/${userId}/projects?with_archived=true&per_page=100&with_phases=true`;
     const projectsPromise = fetch(projectsUrl, { credentials: 'include' }).then((res) => res.json());
 
-    const leaveTypesUrl = `https://app.10000ft.com/api/v1/leave_types?page=1&with_archived=true`;
+    const leaveTypesUrl = `${apiUrl}/leave_types?page=1&with_archived=true`;
     const leaveTypesPromise = fetch(leaveTypesUrl, { credentials: 'include' }).then((res) => res.json());
 
     return Promise.all([timeEntriesPromise, projectsPromise, leaveTypesPromise])
@@ -279,7 +280,7 @@ module.exports = ({ weekday, today }) => {
 
 },{}],8:[function(require,module,exports){
 module.exports = (function anonymous(locals, escapeFn, include, rethrow
-/*``*/) {
+) {
 escapeFn = escapeFn || function (markup) {
   return markup == undefined
     ? ''
@@ -298,7 +299,8 @@ function encode_char(c) {
   return _ENCODE_HTML_RULES[c] || c;
 };
 ;
-  var __output = [], __append = __output.push.bind(__output);
+  var __output = "";
+  function __append(s) { if (s !== undefined && s !== null) __output += s }
   with (locals || {}) {
     ;  const Utils = require('../utils'); 
     ;  const Templates = require('../templates'); 
@@ -359,7 +361,7 @@ function encode_char(c) {
     ;  }); 
     ; __append("\n    </tbody>\n\n</table>\n")
   }
-  return __output.join("");
+  return __output;
 
 })
 },{"../templates":4,"../utils":10}],9:[function(require,module,exports){
